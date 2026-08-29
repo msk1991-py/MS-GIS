@@ -1,0 +1,3308 @@
+<!DOCTYPE html>
+<html lang="en">
+   <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>GeoPro v1.0 — by Manoj Singh</title>
+      <!-- Leaflet -->
+      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+      <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+      <!-- Leaflet Draw -->
+      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+      <!-- ShapefileJS -->
+      <script src="https://unpkg.com/shapefile@0.6.6/dist/shapefile.js"></script>
+      <!-- JSZip for KMZ -->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+      <!-- Togeojson for KML -->
+      <script src="https://unpkg.com/@tmcw/togeojson@5.6.1/dist/togeojson.umd.js"></script>
+      <!-- PapaParse for CSV -->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+      <!-- Proj4 for reprojection -->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js"></script>
+      <!-- Font Awesome -->
+      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+      <!-- Turf.js for spatial ops -->
+      <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+      <style>
+         :root {
+         --bg-dark: #0d1117;
+         --bg-panel: #161b22;
+         --bg-card: #1c2128;
+         --bg-hover: #21262d;
+         --border: #30363d;
+         --border-light: #3d444d;
+         --accent: #58a6ff;
+         --accent2: #3fb950;
+         --accent3: #f78166;
+         --accent4: #d2a8ff;
+         --accent5: #ffa657;
+         --text: #e6edf3;
+         --text-muted: #8b949e;
+         --text-dim: #6e7681;
+         --shadow: 0 8px 32px rgba(0,0,0,0.5);
+         --radius: 8px;
+         --transition: all 0.2s ease;
+         }
+         * { margin:0; padding:0; box-sizing:border-box; }
+         body {
+         font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+         background: var(--bg-dark);
+         color: var(--text);
+         height: 100vh;
+         overflow: hidden;
+         display: flex;
+         flex-direction: column;
+         }
+         /* ── HEADER ── */
+         #header {
+         background: var(--bg-panel);
+         border-bottom: 1px solid var(--border);
+         padding: 0 16px;
+         height: 48px;
+         display: flex;
+         align-items: center;
+         gap: 12px;
+         z-index: 1000;
+         flex-shrink: 0;
+         }
+         #header .logo {
+         display: flex;
+         align-items: center;
+         gap: 8px;
+         font-weight: 700;
+         font-size: 16px;
+         color: var(--accent);
+         letter-spacing: 0.5px;
+         white-space: nowrap;
+         }
+         #header .logo i { font-size: 18px; }
+         #header .logo .version {
+         font-size: 10px;
+         background: var(--accent);
+         color: #000;
+         padding: 1px 5px;
+         border-radius: 4px;
+         font-weight: 700;
+         }
+         #header .credit {
+         font-size: 11px;
+         color: var(--text-muted);
+         white-space: nowrap;
+         }
+         .header-tabs {
+         display: flex;
+         gap: 2px;
+         margin-left: 16px;
+         flex: 1;
+         overflow-x: auto;
+         }
+         .header-tab {
+         padding: 6px 14px;
+         border-radius: 6px;
+         cursor: pointer;
+         font-size: 12px;
+         font-weight: 500;
+         color: var(--text-muted);
+         white-space: nowrap;
+         transition: var(--transition);
+         display: flex;
+         align-items: center;
+         gap: 6px;
+         border: 1px solid transparent;
+         }
+         .header-tab:hover { background: var(--bg-hover); color: var(--text); }
+         .header-tab.active {
+         background: var(--bg-card);
+         color: var(--accent);
+         border-color: var(--border);
+         }
+         .header-tab i { font-size: 11px; }
+         /* ── MAIN LAYOUT ── */
+         #main {
+         display: flex;
+         flex: 1;
+         overflow: hidden;
+         }
+         /* ── LEFT PANEL ── */
+         #left-panel {
+         width: 320px;
+         min-width: 260px;
+         background: var(--bg-panel);
+         border-right: 1px solid var(--border);
+         display: flex;
+         flex-direction: column;
+         overflow: hidden;
+         flex-shrink: 0;
+         transition: width 0.3s ease;
+         }
+         #left-panel.collapsed { width: 0; min-width: 0; }
+         .panel-section {
+         border-bottom: 1px solid var(--border);
+         overflow: hidden;
+         }
+         .panel-section-header {
+         display: flex;
+         align-items: center;
+         gap: 8px;
+         padding: 10px 14px;
+         cursor: pointer;
+         font-size: 12px;
+         font-weight: 600;
+         color: var(--text-muted);
+         text-transform: uppercase;
+         letter-spacing: 0.8px;
+         transition: var(--transition);
+         }
+         .panel-section-header:hover { background: var(--bg-hover); color: var(--text); }
+         .panel-section-header i { font-size: 10px; transition: var(--transition); }
+         .panel-section-header .chevron { margin-left: auto; }
+         .panel-section-header.open .chevron { transform: rotate(180deg); }
+         .panel-section-body { padding: 10px 12px; }
+         /* ── MAP AREA ── */
+         #map-container {
+         flex: 1;
+         display: flex;
+         flex-direction: column;
+         overflow: hidden;
+         position: relative;
+         }
+         #map { flex: 1; }
+         /* ── RIGHT PANEL ── */
+         #right-panel {
+         width: 340px;
+         min-width: 280px;
+         background: var(--bg-panel);
+         border-left: 1px solid var(--border);
+         display: flex;
+         flex-direction: column;
+         overflow: hidden;
+         flex-shrink: 0;
+         transition: width 0.3s ease;
+         }
+         #right-panel.collapsed { width: 0; min-width: 0; }
+         /* ── BOTTOM PANEL ── */
+         #bottom-panel {
+         height: 240px;
+         background: var(--bg-panel);
+         border-top: 1px solid var(--border);
+         display: flex;
+         flex-direction: column;
+         overflow: hidden;
+         flex-shrink: 0;
+         transition: height 0.3s ease;
+         }
+         #bottom-panel.collapsed { height: 0; }
+         /* ── TABS ── */
+         .tab-bar {
+         display: flex;
+         background: var(--bg-dark);
+         border-bottom: 1px solid var(--border);
+         padding: 0 8px;
+         gap: 2px;
+         flex-shrink: 0;
+         overflow-x: auto;
+         }
+         .tab-btn {
+         padding: 8px 14px;
+         font-size: 12px;
+         font-weight: 500;
+         color: var(--text-muted);
+         cursor: pointer;
+         border-bottom: 2px solid transparent;
+         white-space: nowrap;
+         transition: var(--transition);
+         display: flex;
+         align-items: center;
+         gap: 5px;
+         }
+         .tab-btn:hover { color: var(--text); }
+         .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+         .tab-content { display: none; flex: 1; overflow: auto; }
+         .tab-content.active { display: flex; flex-direction: column; }
+         /* ── FORM ELEMENTS ── */
+         .form-group { margin-bottom: 10px; }
+         .form-label {
+         display: block;
+         font-size: 11px;
+         font-weight: 600;
+         color: var(--text-muted);
+         margin-bottom: 5px;
+         text-transform: uppercase;
+         letter-spacing: 0.5px;
+         }
+         .form-control {
+         width: 100%;
+         background: var(--bg-card);
+         border: 1px solid var(--border);
+         border-radius: var(--radius);
+         color: var(--text);
+         padding: 7px 10px;
+         font-size: 12px;
+         transition: var(--transition);
+         outline: none;
+         }
+         .form-control:focus { border-color: var(--accent); }
+         .form-control option { background: var(--bg-card); }
+         select.form-control { cursor: pointer; }
+         textarea.form-control { resize: vertical; font-family: monospace; }
+         /* ── BUTTONS ── */
+         .btn {
+         display: inline-flex;
+         align-items: center;
+         gap: 6px;
+         padding: 7px 14px;
+         border-radius: var(--radius);
+         font-size: 12px;
+         font-weight: 600;
+         cursor: pointer;
+         border: none;
+         transition: var(--transition);
+         white-space: nowrap;
+         }
+         .btn-primary { background: var(--accent); color: #000; }
+         .btn-primary:hover { background: #79baff; }
+         .btn-success { background: var(--accent2); color: #000; }
+         .btn-success:hover { background: #5fd96a; }
+         .btn-danger { background: var(--accent3); color: #000; }
+         .btn-danger:hover { background: #ff8070; }
+         .btn-warning { background: var(--accent5); color: #000; }
+         .btn-warning:hover { background: #ffb870; }
+         .btn-purple { background: var(--accent4); color: #000; }
+         .btn-purple:hover { background: #e0b8ff; }
+         .btn-ghost {
+         background: transparent;
+         color: var(--text-muted);
+         border: 1px solid var(--border);
+         }
+         .btn-ghost:hover { background: var(--bg-hover); color: var(--text); border-color: var(--border-light); }
+         .btn-sm { padding: 4px 10px; font-size: 11px; }
+         .btn-xs { padding: 3px 8px; font-size: 10px; }
+         .btn-block { width: 100%; justify-content: center; }
+         .btn-group { display: flex; gap: 6px; flex-wrap: wrap; }
+         /* ── LAYERS PANEL ── */
+         .layer-item {
+         display: flex;
+         align-items: center;
+         gap: 8px;
+         padding: 7px 8px;
+         border-radius: 6px;
+         margin-bottom: 4px;
+         background: var(--bg-card);
+         border: 1px solid var(--border);
+         transition: var(--transition);
+         cursor: pointer;
+         }
+         .layer-item:hover { border-color: var(--border-light); }
+         .layer-item.active-layer { border-color: var(--accent); }
+         .layer-color-dot {
+         width: 12px;
+         height: 12px;
+         border-radius: 50%;
+         flex-shrink: 0;
+         }
+         .layer-name {
+         flex: 1;
+         font-size: 12px;
+         overflow: hidden;
+         text-overflow: ellipsis;
+         white-space: nowrap;
+         }
+         .layer-count {
+         font-size: 10px;
+         color: var(--text-dim);
+         background: var(--bg-dark);
+         padding: 1px 6px;
+         border-radius: 10px;
+         }
+         .layer-actions {
+         display: flex;
+         gap: 4px;
+         opacity: 0;
+         transition: var(--transition);
+         }
+         .layer-item:hover .layer-actions { opacity: 1; }
+         .layer-action-btn {
+         background: none;
+         border: none;
+         color: var(--text-muted);
+         cursor: pointer;
+         padding: 2px 4px;
+         border-radius: 4px;
+         font-size: 10px;
+         transition: var(--transition);
+         }
+         .layer-action-btn:hover { color: var(--text); background: var(--bg-hover); }
+         /* ── UPLOAD ZONE ── */
+         .upload-zone {
+         border: 2px dashed var(--border);
+         border-radius: var(--radius);
+         padding: 20px;
+         text-align: center;
+         cursor: pointer;
+         transition: var(--transition);
+         background: var(--bg-card);
+         }
+         .upload-zone:hover, .upload-zone.dragover {
+         border-color: var(--accent);
+         background: rgba(88,166,255,0.05);
+         }
+         .upload-zone i { font-size: 24px; color: var(--text-dim); margin-bottom: 8px; }
+         .upload-zone p { font-size: 12px; color: var(--text-muted); }
+         .upload-zone span { font-size: 10px; color: var(--text-dim); }
+         /* ── ATTRIBUTE TABLE ── */
+         .attr-table-wrap {
+         overflow: auto;
+         flex: 1;
+         }
+         table.attr-table {
+         width: 100%;
+         border-collapse: collapse;
+         font-size: 11px;
+         }
+         .attr-table th {
+         background: var(--bg-dark);
+         padding: 7px 10px;
+         text-align: left;
+         font-weight: 600;
+         color: var(--text-muted);
+         border-bottom: 1px solid var(--border);
+         white-space: nowrap;
+         position: sticky;
+         top: 0;
+         z-index: 2;
+         cursor: pointer;
+         user-select: none;
+         }
+         .attr-table th:hover { color: var(--text); }
+         .attr-table td {
+         padding: 5px 10px;
+         border-bottom: 1px solid var(--border);
+         color: var(--text);
+         white-space: nowrap;
+         max-width: 180px;
+         overflow: hidden;
+         text-overflow: ellipsis;
+         }
+         .attr-table tr:hover td { background: var(--bg-hover); }
+         .attr-table tr.selected td { background: rgba(88,166,255,0.1); }
+         .attr-table tr.filtered-out td { opacity: 0.3; }
+         /* ── METADATA PANEL ── */
+         .meta-grid {
+         display: grid;
+         grid-template-columns: 1fr 1fr;
+         gap: 8px;
+         }
+         .meta-card {
+         background: var(--bg-card);
+         border: 1px solid var(--border);
+         border-radius: var(--radius);
+         padding: 10px;
+         }
+         .meta-card .meta-label {
+         font-size: 10px;
+         color: var(--text-dim);
+         text-transform: uppercase;
+         letter-spacing: 0.5px;
+         margin-bottom: 4px;
+         }
+         .meta-card .meta-value {
+         font-size: 12px;
+         font-weight: 600;
+         color: var(--text);
+         word-break: break-all;
+         }
+         .meta-card.full { grid-column: 1/-1; }
+         /* ── BBOX PANEL ── */
+         .bbox-output {
+         background: var(--bg-card);
+         border: 1px solid var(--border);
+         border-radius: var(--radius);
+         padding: 10px;
+         margin-bottom: 8px;
+         }
+         .bbox-format-label {
+         font-size: 10px;
+         color: var(--accent);
+         font-weight: 700;
+         text-transform: uppercase;
+         letter-spacing: 0.5px;
+         margin-bottom: 5px;
+         }
+         .bbox-value {
+         font-family: 'Courier New', monospace;
+         font-size: 11px;
+         color: var(--text);
+         word-break: break-all;
+         background: var(--bg-dark);
+         padding: 6px 8px;
+         border-radius: 4px;
+         cursor: pointer;
+         transition: var(--transition);
+         position: relative;
+         }
+         .bbox-value:hover { background: var(--bg-hover); }
+         .bbox-copy-icon {
+         position: absolute;
+         right: 6px;
+         top: 50%;
+         transform: translateY(-50%);
+         font-size: 10px;
+         color: var(--text-dim);
+         }
+         /* ── QUERY BUILDER ── */
+         .query-rule {
+         display: flex;
+         gap: 6px;
+         align-items: center;
+         margin-bottom: 6px;
+         background: var(--bg-card);
+         padding: 8px;
+         border-radius: var(--radius);
+         border: 1px solid var(--border);
+         flex-wrap: wrap;
+         }
+         .query-rule select, .query-rule input {
+         background: var(--bg-dark);
+         border: 1px solid var(--border);
+         color: var(--text);
+         border-radius: 4px;
+         padding: 4px 8px;
+         font-size: 11px;
+         outline: none;
+         }
+         .query-rule select:focus, .query-rule input:focus { border-color: var(--accent); }
+         .remove-rule-btn {
+         background: none;
+         border: none;
+         color: var(--accent3);
+         cursor: pointer;
+         padding: 2px 6px;
+         border-radius: 4px;
+         font-size: 12px;
+         }
+         /* ── SYMBOLIZE ── */
+         .symbol-preview {
+         display: flex;
+         align-items: center;
+         gap: 8px;
+         padding: 6px;
+         background: var(--bg-card);
+         border-radius: 4px;
+         margin-bottom: 4px;
+         font-size: 11px;
+         }
+         .symbol-swatch {
+         width: 16px;
+         height: 16px;
+         border-radius: 3px;
+         flex-shrink: 0;
+         }
+         /* ── FLOATING TOOLBAR ── */
+         #map-toolbar {
+         position: absolute;
+         top: 10px;
+         left: 50%;
+         transform: translateX(-50%);
+         z-index: 800;
+         display: flex;
+         gap: 6px;
+         background: var(--bg-panel);
+         border: 1px solid var(--border);
+         border-radius: 10px;
+         padding: 6px 10px;
+         box-shadow: var(--shadow);
+         }
+         .map-tool-btn {
+         background: none;
+         border: none;
+         color: var(--text-muted);
+         cursor: pointer;
+         padding: 5px 10px;
+         border-radius: 6px;
+         font-size: 12px;
+         transition: var(--transition);
+         display: flex;
+         align-items: center;
+         gap: 4px;
+         white-space: nowrap;
+         }
+         .map-tool-btn:hover { background: var(--bg-hover); color: var(--text); }
+         .map-tool-btn.active { background: var(--accent); color: #000; }
+         /* ── STATUS BAR ── */
+         #statusbar {
+         background: var(--bg-dark);
+         border-top: 1px solid var(--border);
+         padding: 3px 12px;
+         display: flex;
+         align-items: center;
+         gap: 16px;
+         font-size: 10px;
+         color: var(--text-dim);
+         flex-shrink: 0;
+         }
+         #statusbar .status-item { display: flex; align-items: center; gap: 4px; }
+         #coords-display { margin-left: auto; font-family: monospace; }
+         /* ── TOGGLE BTNS ── */
+         .toggle-panel-btn {
+         position: absolute;
+         top: 50%;
+         transform: translateY(-50%);
+         background: var(--bg-panel);
+         border: 1px solid var(--border);
+         color: var(--text-muted);
+         cursor: pointer;
+         padding: 8px 4px;
+         font-size: 10px;
+         transition: var(--transition);
+         z-index: 900;
+         }
+         .toggle-panel-btn:hover { color: var(--text); background: var(--bg-hover); }
+         #toggle-left { left: 0; border-radius: 0 6px 6px 0; }
+         #toggle-right { right: 0; border-radius: 6px 0 0 6px; }
+         /* ── SCROLLBAR ── */
+         ::-webkit-scrollbar { width: 5px; height: 5px; }
+         ::-webkit-scrollbar-track { background: transparent; }
+         ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+         ::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
+         /* ── NOTIFICATION ── */
+         #notif-container {
+         position: fixed;
+         bottom: 30px;
+         right: 16px;
+         z-index: 9999;
+         display: flex;
+         flex-direction: column;
+         gap: 8px;
+         }
+         .notif {
+         background: var(--bg-card);
+         border: 1px solid var(--border);
+         border-radius: var(--radius);
+         padding: 10px 14px;
+         font-size: 12px;
+         box-shadow: var(--shadow);
+         display: flex;
+         align-items: center;
+         gap: 8px;
+         max-width: 300px;
+         animation: slideIn 0.3s ease;
+         }
+         .notif.success { border-left: 3px solid var(--accent2); }
+         .notif.error { border-left: 3px solid var(--accent3); }
+         .notif.info { border-left: 3px solid var(--accent); }
+         .notif.warn { border-left: 3px solid var(--accent5); }
+         @keyframes slideIn { from { opacity:0; transform: translateX(20px); } to { opacity:1; transform: translateX(0); } }
+         /* ── MODAL ── */
+         .modal-overlay {
+         display: none;
+         position: fixed;
+         inset: 0;
+         background: rgba(0,0,0,0.7);
+         z-index: 5000;
+         align-items: center;
+         justify-content: center;
+         }
+         .modal-overlay.open { display: flex; }
+         .modal {
+         background: var(--bg-panel);
+         border: 1px solid var(--border);
+         border-radius: 12px;
+         width: 90%;
+         max-width: 600px;
+         max-height: 80vh;
+         display: flex;
+         flex-direction: column;
+         box-shadow: var(--shadow);
+         overflow: hidden;
+         }
+         .modal-header {
+         padding: 14px 18px;
+         border-bottom: 1px solid var(--border);
+         display: flex;
+         align-items: center;
+         gap: 10px;
+         font-weight: 700;
+         font-size: 14px;
+         }
+         .modal-close {
+         margin-left: auto;
+         background: none;
+         border: none;
+         color: var(--text-muted);
+         cursor: pointer;
+         font-size: 16px;
+         padding: 2px 6px;
+         border-radius: 4px;
+         }
+         .modal-close:hover { color: var(--text); background: var(--bg-hover); }
+         .modal-body { padding: 18px; overflow-y: auto; flex: 1; }
+         .modal-footer {
+         padding: 12px 18px;
+         border-top: 1px solid var(--border);
+         display: flex;
+         gap: 8px;
+         justify-content: flex-end;
+         }
+         /* ── BADGE ── */
+         .badge {
+         display: inline-block;
+         padding: 2px 7px;
+         border-radius: 10px;
+         font-size: 10px;
+         font-weight: 700;
+         }
+         .badge-blue { background: rgba(88,166,255,0.2); color: var(--accent); }
+         .badge-green { background: rgba(63,185,80,0.2); color: var(--accent2); }
+         .badge-red { background: rgba(247,129,102,0.2); color: var(--accent3); }
+         .badge-purple { background: rgba(210,168,255,0.2); color: var(--accent4); }
+         /* ── MISC ── */
+         .separator { height: 1px; background: var(--border); margin: 10px 0; }
+         .text-muted { color: var(--text-muted); font-size: 11px; }
+         .text-center { text-align: center; }
+         .flex-row { display: flex; gap: 8px; align-items: center; }
+         .flex-col { display: flex; flex-direction: column; gap: 6px; }
+         .p8 { padding: 8px; }
+         .p12 { padding: 12px; }
+         .mb8 { margin-bottom: 8px; }
+         .mono { font-family: monospace; font-size: 11px; }
+         .empty-state {
+         text-align: center;
+         padding: 30px 20px;
+         color: var(--text-dim);
+         }
+         .empty-state i { font-size: 32px; margin-bottom: 10px; display: block; }
+         .empty-state p { font-size: 12px; }
+         /* Leaflet popup override */
+         .leaflet-popup-content-wrapper {
+         background: var(--bg-card) !important;
+         color: var(--text) !important;
+         border: 1px solid var(--border) !important;
+         border-radius: 8px !important;
+         box-shadow: var(--shadow) !important;
+         font-size: 12px !important;
+         }
+         .leaflet-popup-tip { background: var(--bg-card) !important; }
+         .leaflet-popup-content { margin: 12px !important; }
+         .popup-title { font-weight: 700; font-size: 13px; margin-bottom: 8px; color: var(--accent); }
+         .popup-row { display: flex; gap: 8px; margin-bottom: 4px; }
+         .popup-key { color: var(--text-muted); min-width: 80px; }
+         .popup-val { color: var(--text); word-break: break-all; }
+         /* Leaflet draw toolbar override */
+         .leaflet-draw-toolbar a { background-color: var(--bg-card) !important; color: var(--text) !important; }
+         /* right panel inner */
+         .right-section { padding: 12px; border-bottom: 1px solid var(--border); }
+         .right-section-title {
+         font-size: 11px;
+         font-weight: 700;
+         color: var(--text-muted);
+         text-transform: uppercase;
+         letter-spacing: 0.7px;
+         margin-bottom: 10px;
+         display: flex;
+         align-items: center;
+         gap: 6px;
+         }
+         /* crs badge */
+         .crs-badge {
+         display: inline-block;
+         background: rgba(88,166,255,0.15);
+         border: 1px solid rgba(88,166,255,0.3);
+         color: var(--accent);
+         padding: 3px 8px;
+         border-radius: 5px;
+         font-size: 11px;
+         font-weight: 700;
+         font-family: monospace;
+         }
+         /* Progress */
+         .progress-bar-wrap {
+         background: var(--bg-dark);
+         border-radius: 4px;
+         height: 4px;
+         overflow: hidden;
+         }
+         .progress-bar {
+         height: 100%;
+         background: var(--accent);
+         border-radius: 4px;
+         transition: width 0.3s ease;
+         }
+         /* Viridis gradient preview */
+         .gradient-preview {
+         height: 12px;
+         border-radius: 4px;
+         background: linear-gradient(to right, #440154, #31688e, #35b779, #fde725);
+         margin-bottom: 8px;
+         }
+         /* Map base layer selector */
+         #basemap-selector {
+         position: absolute;
+         bottom: 28px;
+         right: 10px;
+         z-index: 800;
+         background: var(--bg-panel);
+         border: 1px solid var(--border);
+         border-radius: 8px;
+         padding: 8px;
+         display: flex;
+         flex-direction: column;
+         gap: 6px;
+         }
+         .basemap-option {
+         display: flex;
+         align-items: center;
+         gap: 6px;
+         font-size: 11px;
+         cursor: pointer;
+         color: var(--text-muted);
+         padding: 4px 6px;
+         border-radius: 5px;
+         }
+         .basemap-option:hover { background: var(--bg-hover); color: var(--text); }
+         .basemap-option input { margin: 0; }
+         /* Input row */
+         .input-row {
+         display: grid;
+         grid-template-columns: 1fr 1fr;
+         gap: 8px;
+         }
+         .input-row-4 {
+         display: grid;
+         grid-template-columns: 1fr 1fr 1fr 1fr;
+         gap: 6px;
+         }
+         /* SQL editor */
+         .sql-editor {
+         background: var(--bg-dark);
+         border: 1px solid var(--border);
+         border-radius: var(--radius);
+         padding: 8px;
+         font-family: 'Courier New', monospace;
+         font-size: 11px;
+         color: #79c0ff;
+         width: 100%;
+         resize: vertical;
+         outline: none;
+         min-height: 60px;
+         }
+         .sql-editor:focus { border-color: var(--accent); }
+         /* %% GEOMETRY COPY PANEL %% */
+         #modal-geocopy .copy-format-row {
+         display: flex; align-items: center; gap: 8px;
+         padding: 7px 10px; border-radius: 6px;
+         background: var(--bg-card); border: 1px solid var(--border);
+         margin-bottom: 6px; cursor: pointer; transition: var(--transition);
+         }
+         #modal-geocopy .copy-format-row:hover { border-color: var(--accent); }
+         #modal-geocopy .copy-format-label {
+         font-size: 10px; font-weight: 700; color: var(--accent);
+         text-transform: uppercase; min-width: 130px;
+         }
+         #modal-geocopy .copy-format-value {
+         font-family: monospace; font-size: 10px; color: var(--text-muted);
+         flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+         }
+         #geocopy-output-box {
+         background: var(--bg-dark); border: 1px solid var(--border);
+         border-radius: var(--radius); padding: 10px;
+         font-family: monospace; font-size: 10px; color: var(--accent2);
+         max-height: 200px; overflow-y: auto; white-space: pre-wrap;
+         word-break: break-all; margin-top: 8px;
+         }
+      </style>
+   </head>
+   <body>
+      <!-- HEADER -->
+      <div id="header">
+         <div class="logo">
+            <i class="fas fa-globe-americas"></i>
+            GeoPro
+            <span class="version">v1.0</span>
+         </div>
+         <div class="credit"><i class="fas fa-code"></i> Manoj Singh</div>
+         <div class="header-tabs">
+            <div class="header-tab active" onclick="switchTool('map')" id="tab-map"><i class="fas fa-map"></i> Map Viewer</div>
+            <div class="header-tab" onclick="switchTool('csv')" id="tab-csv"><i class="fas fa-table"></i> CSV Importer</div>
+            <div class="header-tab" onclick="switchTool('bbox')" id="tab-bbox"><i class="fas fa-vector-square"></i> BBox Tool</div>
+            <div class="header-tab" onclick="switchTool('reproject')" id="tab-reproject"><i class="fas fa-sync-alt"></i> Reproject</div>
+            <div class="header-tab" onclick="switchTool('symbolize')" id="tab-symbolize"><i class="fas fa-palette"></i> Symbolize</div>
+         </div>
+      </div>
+      <!-- MAIN -->
+      <div id="main">
+         <!-- LEFT PANEL -->
+         <div id="left-panel">
+            <!-- File Import -->
+            <div class="panel-section">
+               <div class="panel-section-header open" onclick="toggleSection(this)">
+                  <i class="fas fa-folder-open"></i> Import Files
+                  <i class="fas fa-chevron-down chevron"></i>
+               </div>
+               <div class="panel-section-body">
+                  <div class="upload-zone" id="drop-zone" onclick="document.getElementById('file-input').click()"
+                     ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
+                     <i class="fas fa-cloud-upload-alt"></i>
+                     <p>Drop files here or click</p>
+                     <span>KML · KMZ · GeoJSON · SHP · CSV</span>
+                  </div>
+                  <input type="file" id="file-input" multiple accept=".kml,.kmz,.geojson,.json,.shp,.dbf,.prj,.cpg,.csv"
+                     style="display:none" onchange="handleFiles(this.files)">
+                  <div class="separator"></div>
+                  <div style="font-size:10px;color:var(--text-dim);text-align:center">
+                     For SHP: upload .shp + .dbf + .prj together
+                  </div>
+               </div>
+            </div>
+            <!-- Layers -->
+            <div class="panel-section" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
+               <div class="panel-section-header open" onclick="toggleSection(this)">
+                  <i class="fas fa-layer-group"></i> Layers
+                  <span id="layer-count-badge" class="badge badge-blue" style="margin-left:auto;margin-right:6px">0</span>
+                  <i class="fas fa-chevron-down chevron"></i>
+               </div>
+               <div class="panel-section-body" id="layers-list" style="flex:1;overflow-y:auto;padding:8px;">
+                  <div class="empty-state" id="empty-layers">
+                     <i class="fas fa-layer-group"></i>
+                     <p>No layers loaded</p>
+                  </div>
+               </div>
+            </div>
+            <!-- Layer Options -->
+            <div class="panel-section">
+               <div class="panel-section-header" onclick="toggleSection(this)">
+                  <i class="fas fa-sliders-h"></i> Layer Options
+                  <i class="fas fa-chevron-down chevron"></i>
+               </div>
+               <div class="panel-section-body" style="display:none">
+                  <div class="form-group">
+                     <label class="form-label">Active Layer</label>
+                     <select class="form-control" id="active-layer-select" onchange="setActiveLayer(this.value)">
+                        <option value="">— Select Layer —</option>
+                     </select>
+                  </div>
+                  <div class="form-group">
+                     <label class="form-label">Opacity</label>
+                     <input type="range" min="0" max="100" value="80" class="form-control" id="layer-opacity"
+                        oninput="setLayerOpacity(this.value)" style="padding:4px">
+                  </div>
+                  <div class="btn-group">
+                     <button class="btn btn-danger btn-sm" onclick="removeActiveLayer()"><i class="fas fa-trash"></i> Remove</button>
+                     <button class="btn btn-ghost btn-sm" onclick="zoomToLayer()"><i class="fas fa-expand-arrows-alt"></i> Zoom</button>
+                     <button class="btn btn-success btn-sm" onclick="exportActiveLayer()"><i class="fas fa-download"></i> Export</button>
+                     <button class="btn btn-purple btn-sm" onclick="openGeoCopyModal()">
+                     <i class="fas fa-copy"></i> Copy Geom
+                     </button>
+                  </div>
+               </div>
+            </div>
+         </div>
+         <!-- MAP CONTAINER -->
+         <div id="map-container">
+            <!-- Map Toolbar -->
+            <div id="map-toolbar">
+               <button class="map-tool-btn" onclick="activateTool('pan')" id="tool-pan" title="Pan">
+               <i class="fas fa-hand-paper"></i> Pan
+               </button>
+               <button class="map-tool-btn" onclick="activateTool('bbox-draw')" id="tool-bbox-draw" title="Draw BBox">
+               <i class="fas fa-vector-square"></i> BBox
+               </button>
+               <button class="map-tool-btn" onclick="fitAll()" title="Zoom to All">
+               <i class="fas fa-compress-arrows-alt"></i> Fit All
+               </button>
+               <button class="map-tool-btn" onclick="clearBboxDraw()" title="Clear BBox">
+               <i class="fas fa-times"></i> Clear BBox
+               </button>
+               <button class="map-tool-btn" onclick="showMeasureInfo()" title="Toggle Coords">
+               <i class="fas fa-crosshairs"></i> Coords
+               </button>
+               <button class="map-tool-btn" id="toggle-satellite-btn" onclick="toggleSatellite()">
+               <i class="fas fa-satellite"></i> Satellite
+               </button>
+            </div>
+            <!-- MAP -->
+            <div id="map"></div>
+            <!-- Basemap Selector -->
+            <div id="basemap-selector">
+               <div style="font-size:10px;color:var(--text-dim);font-weight:700;margin-bottom:4px;">BASEMAP</div>
+               <label class="basemap-option">
+               <input type="radio" name="basemap" value="osm" checked onchange="changeBasemap('osm')"> OSM
+               </label>
+               <label class="basemap-option">
+               <input type="radio" name="basemap" value="satellite" onchange="changeBasemap('satellite')"> Satellite
+               </label>
+               <label class="basemap-option">
+               <input type="radio" name="basemap" value="topo" onchange="changeBasemap('topo')"> Topo
+               </label>
+               <label class="basemap-option">
+               <input type="radio" name="basemap" value="dark" onchange="changeBasemap('dark')"> Dark
+               </label>
+            </div>
+            <!-- Toggle left/right -->
+            <button class="toggle-panel-btn" id="toggle-left" onclick="toggleLeftPanel()">
+            <i class="fas fa-chevron-left" id="toggle-left-icon"></i>
+            </button>
+            <button class="toggle-panel-btn" id="toggle-right" onclick="toggleRightPanel()">
+            <i class="fas fa-chevron-right" id="toggle-right-icon"></i>
+            </button>
+         </div>
+         <!-- RIGHT PANEL -->
+         <div id="right-panel">
+            <div class="tab-bar">
+               <div class="tab-btn active" onclick="switchRightTab('metadata', this)"><i class="fas fa-info-circle"></i> Metadata</div>
+               <div class="tab-btn" onclick="switchRightTab('query', this)"><i class="fas fa-filter"></i> Query</div>
+               <div class="tab-btn" onclick="switchRightTab('bbox-info', this)"><i class="fas fa-vector-square"></i> BBox</div>
+               <div class="tab-btn" onclick="switchRightTab('reproject-panel', this)"><i class="fas fa-sync-alt"></i> CRS</div>
+               <div class="tab-btn" onclick="switchRightTab('symbolize-panel', this)"><i class="fas fa-palette"></i> Style</div>
+            </div>
+            <!-- METADATA TAB -->
+            <div class="tab-content active" id="tab-metadata">
+               <div class="right-section" id="metadata-content">
+                  <div class="empty-state">
+                     <i class="fas fa-info-circle"></i>
+                     <p>Load a file to view metadata</p>
+                  </div>
+               </div>
+            </div>
+            <!-- QUERY TAB -->
+            <div class="tab-content" id="tab-query">
+               <div style="padding:12px;flex:1;display:flex;flex-direction:column;gap:10px;overflow-y:auto;">
+                  <div class="form-group">
+                     <label class="form-label">Layer to Query</label>
+                     <select class="form-control" id="query-layer-select" onchange="updateQueryFields()">
+                        <option value="">— Select Layer —</option>
+                     </select>
+                  </div>
+                  <div class="form-group">
+                     <label class="form-label">Query Mode</label>
+                     <div class="flex-row" style="gap:6px">
+                        <label style="font-size:11px;display:flex;align-items:center;gap:4px;cursor:pointer">
+                        <input type="radio" name="query-mode" value="builder" checked onchange="setQueryMode(this.value)"> Builder
+                        </label>
+                        <label style="font-size:11px;display:flex;align-items:center;gap:4px;cursor:pointer">
+                        <input type="radio" name="query-mode" value="sql" onchange="setQueryMode(this.value)"> SQL-like
+                        </label>
+                     </div>
+                  </div>
+                  <div id="query-builder-section">
+                     <label class="form-label">Filter Rules</label>
+                     <div id="query-rules"></div>
+                     <div class="flex-row">
+                        <select class="form-control" id="query-logic" style="width:80px;flex-shrink:0">
+                           <option value="AND">AND</option>
+                           <option value="OR">OR</option>
+                        </select>
+                        <button class="btn btn-ghost btn-sm" onclick="addQueryRule()"><i class="fas fa-plus"></i> Add Rule</button>
+                     </div>
+                  </div>
+                  <div id="sql-section" style="display:none">
+                     <label class="form-label">SQL WHERE clause</label>
+                     <textarea class="sql-editor" id="sql-input" rows="3"
+                        placeholder="e.g. population > 1000 AND type = 'city'"></textarea>
+                     <div style="font-size:10px;color:var(--text-dim);margin-top:4px">
+                        Supports: =, !=, &gt;, &lt;, &gt;=, &lt;=, LIKE, IN, AND, OR, NOT
+                     </div>
+                  </div>
+                  <div class="btn-group">
+                     <button class="btn btn-primary btn-sm" onclick="applyQuery()"><i class="fas fa-search"></i> Apply Filter</button>
+                     <button class="btn btn-ghost btn-sm" onclick="clearQuery()"><i class="fas fa-times"></i> Clear</button>
+                     <button class="btn btn-success btn-sm" onclick="exportFiltered()"><i class="fas fa-download"></i> Export</button>
+                  </div>
+                  <div id="query-stats" style="font-size:11px;color:var(--text-muted)"></div>
+               </div>
+            </div>
+            <!-- BBOX TAB -->
+            <div class="tab-content" id="tab-bbox-info">
+               <div style="padding:12px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:10px;">
+                  <div class="right-section-title"><i class="fas fa-vector-square"></i> Bounding Box</div>
+                  <div class="form-group">
+                     <label class="form-label">Source</label>
+                     <div class="btn-group" style="flex-wrap:wrap">
+                        <button class="btn btn-ghost btn-sm" onclick="bboxFromDraw()"><i class="fas fa-draw-polygon"></i> Draw on Map</button>
+                        <button class="btn btn-ghost btn-sm" onclick="bboxFromLayer()"><i class="fas fa-layer-group"></i> From Layer</button>
+                        <button class="btn btn-ghost btn-sm" onclick="bboxFromSelected()"><i class="fas fa-object-group"></i> From Selected</button>
+                        <button class="btn btn-ghost btn-sm" onclick="openManualBbox()"><i class="fas fa-keyboard"></i> Manual Input</button>
+                     </div>
+                  </div>
+                  <div id="bbox-outputs" style="display:none">
+                     <div class="separator"></div>
+                     <div class="bbox-output">
+                        <div class="bbox-format-label">LRTB (left, right, top, bottom)</div>
+                        <div class="bbox-value" onclick="copyBbox('lrtb')" id="bbox-lrtb">
+                           <i class="fas fa-copy bbox-copy-icon"></i>
+                        </div>
+                     </div>
+                     <div class="bbox-output">
+                        <div class="bbox-format-label">LBRT (left, bottom, right, top)</div>
+                        <div class="bbox-value" onclick="copyBbox('lbrt')" id="bbox-lbrt">
+                           <i class="fas fa-copy bbox-copy-icon"></i>
+                        </div>
+                     </div>
+                     <div class="bbox-output">
+                        <div class="bbox-format-label">WKT POLYGON</div>
+                        <div class="bbox-value" onclick="copyBbox('wkt')" id="bbox-wkt">
+                           <i class="fas fa-copy bbox-copy-icon"></i>
+                        </div>
+                     </div>
+                     <div class="bbox-output">
+                        <div class="bbox-format-label">GeoJSON</div>
+                        <div class="bbox-value" onclick="copyBbox('geojson')" id="bbox-geojson">
+                           <i class="fas fa-copy bbox-copy-icon"></i>
+                        </div>
+                     </div>
+                     <div class="bbox-output">
+                        <div class="bbox-format-label">Earth Engine (ee.Geometry.Rectangle)</div>
+                        <div class="bbox-value" onclick="copyBbox('ee')" id="bbox-ee">
+                           <i class="fas fa-copy bbox-copy-icon"></i>
+                        </div>
+                     </div>
+                     <div class="bbox-output">
+                        <div class="bbox-format-label">GDAL / ogr2ogr -spat</div>
+                        <div class="bbox-value" onclick="copyBbox('gdal')" id="bbox-gdal">
+                           <i class="fas fa-copy bbox-copy-icon"></i>
+                        </div>
+                     </div>
+                     <div class="bbox-output">
+                        <div class="bbox-format-label">Shapely (Python)</div>
+                        <div class="bbox-value" onclick="copyBbox('shapely')" id="bbox-shapely">
+                           <i class="fas fa-copy bbox-copy-icon"></i>
+                        </div>
+                     </div>
+                     <div class="btn-group" style="margin-top:8px">
+                        <button class="btn btn-success btn-sm" onclick="exportBbox()"><i class="fas fa-download"></i> Export BBox</button>
+                        <button class="btn btn-ghost btn-sm" onclick="clearBboxDisplay()"><i class="fas fa-times"></i> Clear</button>
+                     </div>
+                  </div>
+                  <div id="bbox-empty" class="empty-state">
+                     <i class="fas fa-vector-square"></i>
+                     <p>Draw on map or select a layer to get bounding box</p>
+                  </div>
+               </div>
+            </div>
+            <!-- REPROJECT TAB -->
+            <div class="tab-content" id="tab-reproject-panel">
+               <div style="padding:12px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:10px;">
+                  <div class="right-section-title"><i class="fas fa-sync-alt"></i> Reproject / CRS</div>
+                  <div class="form-group">
+                     <label class="form-label">Source Layer</label>
+                     <select class="form-control" id="reproject-layer" onchange="detectSourceCRS()">
+                        <option value="">— Select Layer —</option>
+                     </select>
+                  </div>
+                  <div class="form-group">
+                     <label class="form-label">Source CRS (detected)</label>
+                     <div id="source-crs-display" class="crs-badge">—</div>
+                  </div>
+                  <div class="form-group">
+                     <label class="form-label">Target CRS</label>
+                     <select class="form-control" id="target-crs">
+                        <option value="EPSG:4326">EPSG:4326 — WGS84 Geographic</option>
+                        <option value="EPSG:3857">EPSG:3857 — Web Mercator</option>
+                        <option value="EPSG:32643">EPSG:32643 — UTM Zone 43N</option>
+                        <option value="EPSG:32644">EPSG:32644 — UTM Zone 44N</option>
+                        <option value="EPSG:32645">EPSG:32645 — UTM Zone 45N</option>
+                        <option value="EPSG:32646">EPSG:32646 — UTM Zone 46N</option>
+                        <option value="EPSG:32644">EPSG:32644 — UTM Zone 44N</option>
+                        <option value="EPSG:4755">EPSG:4755 — Indian 1975</option>
+                        <option value="EPSG:7755">EPSG:7755 — WGS 84 / India NSF LCC</option>
+                        <option value="EPSG:24378">EPSG:24378 — Kalianpur 1975 / India zone I</option>
+                        <option value="EPSG:32601">EPSG:32601 — UTM Zone 1N</option>
+                        <option value="custom">Custom EPSG…</option>
+                     </select>
+                  </div>
+                  <div id="custom-crs-group" style="display:none" class="form-group">
+                     <label class="form-label">Custom EPSG Code</label>
+                     <input type="text" class="form-control" id="custom-crs-input" placeholder="e.g. 32643">
+                  </div>
+                  <div class="form-group">
+                     <label class="form-label">Output Layer Name</label>
+                     <input type="text" class="form-control" id="reproject-output-name" placeholder="reprojected_layer">
+                  </div>
+                  <button class="btn btn-primary btn-block" onclick="reprojectLayer()">
+                  <i class="fas fa-sync-alt"></i> Reproject
+                  </button>
+                  <div id="reproject-status" style="font-size:11px;color:var(--text-muted)"></div>
+               </div>
+            </div>
+            <!-- SYMBOLIZE TAB -->
+            <div class="tab-content" id="tab-symbolize-panel">
+               <div style="padding:12px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:10px;">
+                  <div class="right-section-title"><i class="fas fa-palette"></i> Symbolize</div>
+                  <div class="form-group">
+                     <label class="form-label">Layer</label>
+                     <select class="form-control" id="symbolize-layer" onchange="loadSymbolizeFields()">
+                        <option value="">— Select Layer —</option>
+                     </select>
+                  </div>
+                  <div class="form-group">
+                     <label class="form-label">Symbolize By</label>
+                     <select class="form-control" id="symbolize-mode">
+                        <option value="single">Single Color</option>
+                        <option value="categorical">Categorical (Field)</option>
+                        <option value="numeric">Numeric (Graduated)</option>
+                     </select>
+                  </div>
+                  <div class="form-group" id="symbolize-field-group">
+                     <label class="form-label">Field</label>
+                     <select class="form-control" id="symbolize-field"></select>
+                  </div>
+                  <div id="symbolize-single-opts">
+                     <div class="form-group">
+                        <label class="form-label">Fill Color</label>
+                        <input type="color" class="form-control" id="single-color" value="#58a6ff" style="height:36px;padding:2px">
+                     </div>
+                     <div class="form-group">
+                        <label class="form-label">Stroke Color</label>
+                        <input type="color" class="form-control" id="single-stroke" value="#ffffff" style="height:36px;padding:2px">
+                     </div>
+                     <div class="form-group">
+                        <label class="form-label">Opacity</label>
+                        <input type="range" min="0" max="100" value="70" class="form-control" id="single-opacity" style="padding:4px">
+                     </div>
+                     <div class="form-group">
+                        <label class="form-label">Stroke Width</label>
+                        <input type="range" min="0" max="10" value="1" step="0.5" class="form-control" id="single-weight" style="padding:4px">
+                     </div>
+                     <div class="form-group">
+                        <label class="form-label">Point Size (radius)</label>
+                        <input type="range" min="2" max="20" value="6" class="form-control" id="single-radius" style="padding:4px">
+                     </div>
+                  </div>
+                  <div id="symbolize-numeric-opts" style="display:none">
+                     <div class="form-group">
+                        <label class="form-label">Color Ramp</label>
+                        <select class="form-control" id="numeric-colormap">
+                           <option value="viridis">Viridis</option>
+                           <option value="plasma">Plasma</option>
+                           <option value="inferno">Inferno</option>
+                           <option value="blues">Blues</option>
+                           <option value="greens">Greens</option>
+                           <option value="reds">Reds</option>
+                           <option value="spectral">Spectral</option>
+                           <option value="rdylgn">RdYlGn</option>
+                        </select>
+                     </div>
+                     <div class="gradient-preview" id="gradient-preview-bar"></div>
+                     <div class="form-group">
+                        <label class="form-label">Classes</label>
+                        <input type="number" class="form-control" id="numeric-classes" value="5" min="3" max="10">
+                     </div>
+                  </div>
+                  <button class="btn btn-primary btn-block" onclick="applySymbolize()">
+                  <i class="fas fa-paint-brush"></i> Apply Style
+                  </button>
+                  <button class="btn btn-ghost btn-block" onclick="resetSymbolize()">
+                  <i class="fas fa-undo"></i> Reset Default
+                  </button>
+                  <div id="symbolize-legend" style="margin-top:4px"></div>
+               </div>
+            </div>
+         </div>
+      </div>
+      <!-- BOTTOM PANEL — ATTRIBUTE TABLE -->
+      <div id="bottom-panel">
+         <div class="tab-bar">
+            <div class="tab-btn active" onclick="switchBottomTab('attr-table',this)"><i class="fas fa-table"></i> Attribute Table</div>
+            <div class="tab-btn" onclick="switchBottomTab('csv-import',this)"><i class="fas fa-file-csv"></i> CSV Import</div>
+            <div class="tab-btn" onclick="switchBottomTab('console',this)"><i class="fas fa-terminal"></i> Log</div>
+            <button class="btn btn-ghost btn-xs" style="margin-left:auto;margin-right:8px;align-self:center"
+               onclick="toggleBottomPanel()"><i class="fas fa-chevron-down" id="bottom-toggle-icon"></i></button>
+         </div>
+         <!-- ATTRIBUTE TABLE -->
+         <div class="tab-content active" id="tab-attr-table">
+            <div style="padding:6px 10px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap;">
+               <select class="form-control" id="attr-layer-select" onchange="loadAttrTable()" style="width:180px;">
+                  <option value="">— Select Layer —</option>
+               </select>
+               <input type="text" class="form-control" id="attr-search" placeholder="Search attributes…"
+                  oninput="filterAttrTable()" style="width:180px">
+               <span id="attr-count" style="font-size:11px;color:var(--text-muted)"></span>
+               <div style="margin-left:auto;display:flex;gap:6px">
+                  <button class="btn btn-ghost btn-xs" onclick="selectAllFeatures()"><i class="fas fa-check-square"></i> Select All</button>
+                  <button class="btn btn-ghost btn-xs" onclick="clearSelection()"><i class="fas fa-square"></i> Clear Sel</button>
+                  <button class="btn btn-success btn-xs" onclick="exportSelected()"><i class="fas fa-download"></i> Export Selected</button>
+                  <button class="btn btn-primary btn-xs" onclick="exportFiltered()"><i class="fas fa-filter"></i> Export Filtered</button>
+                  <button class="btn btn-purple btn-xs" onclick="openGeoCopyModal('selected')">
+                  <i class="fas fa-copy"></i> Copy Geom
+                  </button>
+               </div>
+            </div>
+            <div class="attr-table-wrap" id="attr-table-wrap">
+               <div class="empty-state">
+                  <i class="fas fa-table"></i>
+                  <p>Select a layer to view attribute table</p>
+               </div>
+            </div>
+         </div>
+         <!-- CSV IMPORT TAB -->
+         <div class="tab-content" id="tab-csv-import">
+            <div style="padding:12px;display:flex;gap:16px;overflow-y:auto;flex:1;flex-wrap:wrap;">
+               <div style="flex:1;min-width:240px">
+                  <div class="form-group">
+                     <label class="form-label">CSV File</label>
+                     <input type="file" accept=".csv,.txt" class="form-control" id="csv-file-input" onchange="previewCSV(this)">
+                  </div>
+                  <div id="csv-col-mapping" style="display:none">
+                     <div class="input-row">
+                        <div class="form-group">
+                           <label class="form-label">X / Longitude</label>
+                           <select class="form-control" id="csv-x-col"></select>
+                        </div>
+                        <div class="form-group">
+                           <label class="form-label">Y / Latitude</label>
+                           <select class="form-control" id="csv-y-col"></select>
+                        </div>
+                        <div class="form-group">
+                           <label class="form-label">Z / Elevation</label>
+                           <select class="form-control" id="csv-z-col">
+                              <option value="">None</option>
+                           </select>
+                        </div>
+                        <div class="form-group">
+                           <label class="form-label">CRS</label>
+                           <select class="form-control" id="csv-crs">
+                              <option value="EPSG:4326">WGS84 (4326)</option>
+                              <option value="EPSG:3857">Web Mercator</option>
+                              <option value="EPSG:32643">UTM 43N</option>
+                           </select>
+                        </div>
+                     </div>
+                     <div class="form-group">
+                        <label class="form-label">Layer Name</label>
+                        <input type="text" class="form-control" id="csv-layer-name" placeholder="CSV Points">
+                     </div>
+                     <div class="btn-group">
+                        <button class="btn btn-primary btn-sm" onclick="importCSVPoints()"><i class="fas fa-map-marker-alt"></i> Plot on Map</button>
+                        <button class="btn btn-success btn-sm" onclick="saveCSVAsGeoJSON()"><i class="fas fa-download"></i> Save GeoJSON</button>
+                     </div>
+                  </div>
+               </div>
+               <div style="flex:1;min-width:200px">
+                  <div id="csv-preview-wrap">
+                     <div class="empty-state" style="padding:20px">
+                        <i class="fas fa-file-csv"></i>
+                        <p>Load a CSV to preview</p>
+                     </div>
+                  </div>
+               </div>
+            </div>
+         </div>
+         <!-- CONSOLE -->
+         <div class="tab-content" id="tab-console">
+            <div id="console-log" style="padding:8px;font-family:monospace;font-size:11px;overflow-y:auto;flex:1;color:var(--text-muted)">
+               <div style="color:var(--accent)">GeoPro v1.0 — Console Log initialized</div>
+               <div style="color:var(--text-dim)">© Manoj Singh</div>
+            </div>
+         </div>
+      </div>
+      <!-- STATUS BAR -->
+      <div id="statusbar">
+         <div class="status-item"><i class="fas fa-circle" style="color:var(--accent2);font-size:6px"></i> Ready</div>
+         <div class="status-item" id="status-features">Features: —</div>
+         <div class="status-item" id="status-crs">CRS: WGS84</div>
+         <div class="status-item" id="status-zoom">Zoom: 3</div>
+         <div id="coords-display">Lat: — | Lon: —</div>
+      </div>
+      <!-- NOTIFICATION CONTAINER -->
+      <div id="notif-container"></div>
+      <!-- MODAL: Manual BBox -->
+      <div class="modal-overlay" id="modal-manual-bbox">
+         <div class="modal">
+            <div class="modal-header">
+               <i class="fas fa-vector-square" style="color:var(--accent)"></i>
+               Manual BBox Input
+               <button class="modal-close" onclick="closeModal('modal-manual-bbox')"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+               <div class="form-group">
+                  <label class="form-label">Format</label>
+                  <select class="form-control" id="manual-bbox-format">
+                     <option value="lbrt">L, B, R, T (minX, minY, maxX, maxY)</option>
+                     <option value="lrtb">L, R, T, B (minX, maxX, maxY, minY)</option>
+                     <option value="wkt">WKT POLYGON</option>
+                  </select>
+               </div>
+               <div class="form-group" id="manual-bbox-coords-group">
+                  <label class="form-label">Values (comma-separated)</label>
+                  <input type="text" class="form-control mono" id="manual-bbox-input"
+                     placeholder="e.g. 68.0, 8.0, 97.0, 37.0">
+               </div>
+               <div class="form-group" id="manual-bbox-wkt-group" style="display:none">
+                  <label class="form-label">WKT String</label>
+                  <textarea class="form-control mono" id="manual-bbox-wkt-input" rows="3"
+                     placeholder="POLYGON((xmin ymin, xmax ymin, xmax ymax, xmin ymax, xmin ymin))"></textarea>
+               </div>
+            </div>
+            <div class="modal-footer">
+               <button class="btn btn-ghost" onclick="closeModal('modal-manual-bbox')">Cancel</button>
+               <button class="btn btn-primary" onclick="applyManualBbox()"><i class="fas fa-check"></i> Apply</button>
+            </div>
+         </div>
+      </div>
+      <!-- MODAL: Export Options -->
+      <div class="modal-overlay" id="modal-export">
+         <div class="modal">
+            <div class="modal-header">
+               <i class="fas fa-download" style="color:var(--accent2)"></i>
+               Export Layer
+               <button class="modal-close" onclick="closeModal('modal-export')"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+               <div class="form-group">
+                  <label class="form-label">Format</label>
+                  <select class="form-control" id="export-format">
+                     <option value="geojson">GeoJSON</option>
+                     <option value="csv">CSV</option>
+                     <option value="kml">KML</option>
+                     <option value="wkt">WKT (all features)</option>
+                  </select>
+               </div>
+               <div class="form-group">
+                  <label class="form-label">Filename</label>
+                  <input type="text" class="form-control" id="export-filename" value="export">
+               </div>
+               <div class="form-group">
+                  <label class="form-label">Features</label>
+                  <select class="form-control" id="export-which">
+                     <option value="all">All features</option>
+                     <option value="filtered">Filtered features only</option>
+                     <option value="selected">Selected features only</option>
+                  </select>
+               </div>
+            </div>
+            <div class="modal-footer">
+               <button class="btn btn-ghost" onclick="closeModal('modal-export')">Cancel</button>
+               <button class="btn btn-success" onclick="doExport()"><i class="fas fa-download"></i> Export</button>
+            </div>
+         </div>
+      </div>
+      <!-- MODAL: Geometry Copy -->
+      <div class="modal-overlay" id="modal-geocopy">
+         <div class="modal" style="max-width:700px">
+            <div class="modal-header">
+               <i class="fas fa-copy" style="color:var(--accent4)"></i>
+               Copy Geometry / Feature
+               <button class="modal-close" onclick="closeModal('modal-geocopy')"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+               <!-- Source -->
+               <div class="form-group">
+                  <label class="form-label">Layer</label>
+                  <select class="form-control" id="geocopy-layer-sel" onchange="refreshGeoCopy()">
+                     <option value="">— Select Layer —</option>
+                  </select>
+               </div>
+               <div class="input-row" style="margin-bottom:10px">
+                  <div class="form-group">
+                     <label class="form-label">Feature Scope</label>
+                     <select class="form-control" id="geocopy-scope" onchange="refreshGeoCopy()">
+                        <option value="all">All Features</option>
+                        <option value="selected">Selected Features</option>
+                        <option value="filtered">Filtered Features</option>
+                     </select>
+                  </div>
+                  <div class="form-group">
+                     <label class="form-label">Output Type</label>
+                     <select class="form-control" id="geocopy-outtype" onchange="refreshGeoCopy()">
+                        <option value="fc">FeatureCollection</option>
+                        <option value="geom">Geometry Only</option>
+                        <option value="geomlist">Geometry List</option>
+                     </select>
+                  </div>
+               </div>
+               <!-- Format Rows -->
+               <label class="form-label">Click a format to copy:</label>
+               <div class="copy-format-row" onclick="doGeoCopy('geojson')">
+                  <span class="copy-format-label">📋 GeoJSON</span>
+                  <span class="copy-format-value" id="gcprev-geojson">—</span>
+                  <button class="btn btn-ghost btn-xs"><i class="fas fa-copy"></i></button>
+               </div>
+               <div class="copy-format-row" onclick="doGeoCopy('ee_rect')">
+                  <span class="copy-format-label">🌍 GEE Rectangle</span>
+                  <span class="copy-format-value" id="gcprev-ee_rect">—</span>
+                  <button class="btn btn-ghost btn-xs"><i class="fas fa-copy"></i></button>
+               </div>
+               <div class="copy-format-row" onclick="doGeoCopy('ee_geom')">
+                  <span class="copy-format-label">🌍 GEE ee.Geometry</span>
+                  <span class="copy-format-value" id="gcprev-ee_geom">—</span>
+                  <button class="btn btn-ghost btn-xs"><i class="fas fa-copy"></i></button>
+               </div>
+               <div class="copy-format-row" onclick="doGeoCopy('ee_fc')">
+                  <span class="copy-format-label">🌍 GEE ee.FeatureCollection</span>
+                  <span class="copy-format-value" id="gcprev-ee_fc">—</span>
+                  <button class="btn btn-ghost btn-xs"><i class="fas fa-copy"></i></button>
+               </div>
+               <div class="copy-format-row" onclick="doGeoCopy('wkt')">
+                  <span class="copy-format-label">📐 WKT</span>
+                  <span class="copy-format-value" id="gcprev-wkt">—</span>
+                  <button class="btn btn-ghost btn-xs"><i class="fas fa-copy"></i></button>
+               </div>
+               <div class="copy-format-row" onclick="doGeoCopy('shapely')">
+                  <span class="copy-format-label">🐍 Python Shapely</span>
+                  <span class="copy-format-value" id="gcprev-shapely">—</span>
+                  <button class="btn btn-ghost btn-xs"><i class="fas fa-copy"></i></button>
+               </div>
+               <div class="copy-format-row" onclick="doGeoCopy('turf')">
+                  <span class="copy-format-label">📦 Turf.js</span>
+                  <span class="copy-format-value" id="gcprev-turf">—</span>
+                  <button class="btn btn-ghost btn-xs"><i class="fas fa-copy"></i></button>
+               </div>
+               <div class="copy-format-row" onclick="doGeoCopy('coords')">
+                  <span class="copy-format-label">🔢 Coords Array</span>
+                  <span class="copy-format-value" id="gcprev-coords">—</span>
+                  <button class="btn btn-ghost btn-xs"><i class="fas fa-copy"></i></button>
+               </div>
+               <!-- Output Preview -->
+               <div id="geocopy-output-box" style="display:none"></div>
+            </div>
+            <div class="modal-footer">
+               <button class="btn btn-ghost" onclick="closeModal('modal-geocopy')">Close</button>
+               <button class="btn btn-primary" onclick="doGeoCopy('geojson')">
+               <i class="fas fa-copy"></i> Copy GeoJSON
+               </button>
+            </div>
+         </div>
+      </div>
+      <script>
+         // ═══════════════════════════════════════════════════════
+         //  GLOBAL STATE
+         // ═══════════════════════════════════════════════════════
+         const state = {
+           layers: {},       // { id: { name, geojson, leafletLayer, color, visible, crs, meta, filteredIndices, selectedIndices } }
+           activeLayerId: null,
+           currentBbox: null,
+           queryMode: 'builder',
+           queryRules: [],
+           bboxLayer: null,
+           bboxDrawMode: false,
+           bboxStart: null,
+           bboxRect: null,
+           csvData: null,
+           csvHeaders: [],
+           basemapLayers: {},
+           currentBasemap: 'osm',
+         };
+         
+         let layerIdCounter = 0;
+         const COLORS = ['#58a6ff','#3fb950','#f78166','#d2a8ff','#ffa657','#79c0ff','#56d364','#ff7b72','#cae8ff','#ffa198'];
+         
+         // ═══════════════════════════════════════════════════════
+         //  MAP INIT
+         // ═══════════════════════════════════════════════════════
+         const map = L.map('map', { zoomControl: false, attributionControl: true }).setView([20, 78], 5);
+         L.control.zoom({ position: 'topright' }).addTo(map);
+         
+         const basemaps = {
+           osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+             attribution: '© OpenStreetMap', maxZoom: 19
+           }),
+           satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+             attribution: '© Esri', maxZoom: 19
+           }),
+           topo: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+             attribution: '© OpenTopoMap', maxZoom: 17
+           }),
+           dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+             attribution: '© CartoDB', maxZoom: 19
+           })
+         };
+         basemaps.osm.addTo(map);
+         state.basemapLayers = basemaps;
+         
+         map.on('mousemove', e => {
+           document.getElementById('coords-display').textContent =
+             `Lat: ${e.latlng.lat.toFixed(6)} | Lon: ${e.latlng.lng.toFixed(6)}`;
+         });
+         map.on('zoomend', () => {
+           document.getElementById('status-zoom').textContent = `Zoom: ${map.getZoom()}`;
+         });
+         
+         // ═══════════════════════════════════════════════════════
+         //  BASEMAP
+         // ═══════════════════════════════════════════════════════
+         function changeBasemap(type) {
+           Object.values(basemaps).forEach(b => map.removeLayer(b));
+           basemaps[type].addTo(map);
+           basemaps[type].bringToBack();
+           state.currentBasemap = type;
+           logMsg(`Basemap → ${type}`);
+         }
+         
+         function toggleSatellite() {
+           const next = state.currentBasemap === 'satellite' ? 'osm' : 'satellite';
+           document.querySelector(`input[name="basemap"][value="${next}"]`).checked = true;
+           changeBasemap(next);
+         }
+         
+         // ═══════════════════════════════════════════════════════
+         //  PANEL TOGGLES
+         // ═══════════════════════════════════════════════════════
+         function toggleLeftPanel() {
+           const p = document.getElementById('left-panel');
+           const ico = document.getElementById('toggle-left-icon');
+           p.classList.toggle('collapsed');
+           ico.className = p.classList.contains('collapsed') ? 'fas fa-chevron-right' : 'fas fa-chevron-left';
+           setTimeout(() => map.invalidateSize(), 310);
+         }
+         function toggleRightPanel() {
+           const p = document.getElementById('right-panel');
+           const ico = document.getElementById('toggle-right-icon');
+           p.classList.toggle('collapsed');
+           ico.className = p.classList.contains('collapsed') ? 'fas fa-chevron-left' : 'fas fa-chevron-right';
+           setTimeout(() => map.invalidateSize(), 310);
+         }
+         function toggleBottomPanel() {
+           const p = document.getElementById('bottom-panel');
+           const ico = document.getElementById('bottom-toggle-icon');
+           p.classList.toggle('collapsed');
+           ico.className = p.classList.contains('collapsed') ? 'fas fa-chevron-up' : 'fas fa-chevron-down';
+           setTimeout(() => map.invalidateSize(), 310);
+         }
+         function toggleSection(header) {
+           const body = header.nextElementSibling;
+           const chevron = header.querySelector('.chevron');
+           header.classList.toggle('open');
+           if (body) body.style.display = body.style.display === 'none' ? '' : 'none';
+           if (chevron) chevron.style.transform = header.classList.contains('open') ? '' : 'rotate(-90deg)';
+         }
+         
+         // ═══════════════════════════════════════════════════════
+         //  TABS
+         // ═══════════════════════════════════════════════════════
+         function switchRightTab(id, btn) {
+           document.querySelectorAll('#right-panel .tab-content').forEach(t => t.classList.remove('active'));
+           document.querySelectorAll('#right-panel .tab-btn').forEach(b => b.classList.remove('active'));
+           document.getElementById('tab-' + id).classList.add('active');
+           if (btn) btn.classList.add('active');
+         }
+         function switchBottomTab(id, btn) {
+           document.querySelectorAll('#bottom-panel .tab-content').forEach(t => t.classList.remove('active'));
+           document.querySelectorAll('#bottom-panel .tab-btn').forEach(b => b.classList.remove('active'));
+           document.getElementById('tab-' + id).classList.add('active');
+           if (btn) btn.classList.add('active');
+         }
+         function switchTool(tool) {
+           document.querySelectorAll('.header-tab').forEach(t => t.classList.remove('active'));
+           document.getElementById('tab-' + tool).classList.add('active');
+           if (tool === 'csv') switchBottomTab('csv-import', document.querySelector('#bottom-panel .tab-btn:nth-child(2)'));
+           if (tool === 'bbox') switchRightTab('bbox-info', document.querySelector('#right-panel .tab-btn:nth-child(3)'));
+           if (tool === 'reproject') switchRightTab('reproject-panel', document.querySelector('#right-panel .tab-btn:nth-child(4)'));
+           if (tool === 'symbolize') switchRightTab('symbolize-panel', document.querySelector('#right-panel .tab-btn:nth-child(5)'));
+         }
+         
+         // ═══════════════════════════════════════════════════════
+         //  NOTIFICATIONS & LOG
+         // ═══════════════════════════════════════════════════════
+         function notify(msg, type = 'info', duration = 3000) {
+           const c = document.getElementById('notif-container');
+           const icons = { info: 'fa-info-circle', success: 'fa-check-circle', error: 'fa-exclamation-triangle', warn: 'fa-exclamation-circle' };
+           const colors = { info: 'var(--accent)', success: 'var(--accent2)', error: 'var(--accent3)', warn: 'var(--accent5)' };
+           const n = document.createElement('div');
+           n.className = `notif ${type}`;
+           n.innerHTML = `<i class="fas ${icons[type]}" style="color:${colors[type]}"></i> ${msg}`;
+           c.appendChild(n);
+           logMsg(`[${type.toUpperCase()}] ${msg}`);
+           setTimeout(() => { n.style.opacity = '0'; n.style.transition = 'opacity 0.3s'; setTimeout(() => n.remove(), 300); }, duration);
+         }
+         function logMsg(msg) {
+           const cl = document.getElementById('console-log');
+           const d = document.createElement('div');
+           const now = new Date();
+           d.innerHTML = `<span style="color:var(--text-dim)">[${now.toLocaleTimeString()}]</span> ${msg}`;
+           cl.appendChild(d);
+           cl.scrollTop = cl.scrollHeight;
+         }
+         
+         // ═══════════════════════════════════════════════════════
+         //  FILE HANDLING
+         // ═══════════════════════════════════════════════════════
+         function handleDragOver(e) { e.preventDefault(); document.getElementById('drop-zone').classList.add('dragover'); }
+         function handleDragLeave(e) { document.getElementById('drop-zone').classList.remove('dragover'); }
+         function handleDrop(e) {
+           e.preventDefault();
+           document.getElementById('drop-zone').classList.remove('dragover');
+           handleFiles(e.dataTransfer.files);
+         }
+         function handleFiles(files) {
+           const fileArr = Array.from(files);
+           const shpFiles = fileArr.filter(f => f.name.endsWith('.shp'));
+           const dbfFiles = fileArr.filter(f => f.name.endsWith('.dbf'));
+           const prjFiles = fileArr.filter(f => f.name.endsWith('.prj'));
+         
+           if (shpFiles.length > 0) {
+             shpFiles.forEach(shp => {
+               const baseName = shp.name.replace('.shp', '');
+               const dbf = dbfFiles.find(f => f.name.replace('.dbf','') === baseName);
+               const prj = prjFiles.find(f => f.name.replace('.prj','') === baseName);
+               loadShapefile(shp, dbf, prj);
+             });
+             fileArr.filter(f => !f.name.endsWith('.shp') && !f.name.endsWith('.dbf') && !f.name.endsWith('.prj') && !f.name.endsWith('.cpg'))
+               .forEach(f => loadFile(f));
+           } else {
+             fileArr.filter(f => !f.name.endsWith('.dbf') && !f.name.endsWith('.prj') && !f.name.endsWith('.cpg'))
+               .forEach(f => loadFile(f));
+           }
+         }
+         
+         function loadFile(file) {
+           const ext = file.name.split('.').pop().toLowerCase();
+           logMsg(`Loading: ${file.name}`);
+           if (ext === 'geojson' || ext === 'json') loadGeoJSON(file);
+           else if (ext === 'kml') loadKML(file);
+           else if (ext === 'kmz') loadKMZ(file);
+           else if (ext === 'csv') { previewCSVFile(file); switchTool('csv'); }
+           else notify(`Unsupported format: .${ext}`, 'warn');
+         }
+         
+         function loadGeoJSON(file) {
+           const reader = new FileReader();
+           reader.onload = e => {
+             try {
+               const gj = JSON.parse(e.target.result);
+               addLayer(gj, file.name.replace(/\.[^.]+$/, ''), 'EPSG:4326', file.name);
+             } catch { notify('Invalid GeoJSON', 'error'); }
+           };
+           reader.readAsText(file);
+         }
+         
+         function loadKML(file) {
+           const reader = new FileReader();
+           reader.onload = e => {
+             try {
+               const parser = new DOMParser();
+               const kmlDoc = parser.parseFromString(e.target.result, 'text/xml');
+               const gj = toGeoJSON.kml(kmlDoc);
+               addLayer(gj, file.name.replace('.kml',''), 'EPSG:4326', file.name);
+             } catch (err) { notify('Error parsing KML: ' + err.message, 'error'); }
+           };
+           reader.readAsText(file);
+         }
+         
+         function loadKMZ(file) {
+           const reader = new FileReader();
+           reader.onload = async e => {
+             try {
+               const zip = await JSZip.loadAsync(e.target.result);
+               const kmlFile = Object.keys(zip.files).find(n => n.endsWith('.kml'));
+               if (!kmlFile) { notify('No KML found in KMZ', 'error'); return; }
+               const kmlText = await zip.files[kmlFile].async('string');
+               const parser = new DOMParser();
+               const kmlDoc = parser.parseFromString(kmlText, 'text/xml');
+               const gj = toGeoJSON.kml(kmlDoc);
+               addLayer(gj, file.name.replace('.kmz',''), 'EPSG:4326', file.name);
+             } catch (err) { notify('Error parsing KMZ: ' + err.message, 'error'); }
+           };
+           reader.readAsArrayBuffer(file);
+         }
+         
+         function loadShapefile(shpFile, dbfFile, prjFile) {
+           const readBuf = f => new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result); r.readAsArrayBuffer(f); });
+           const getName = shpFile.name.replace('.shp','');
+           let crs = 'EPSG:4326';
+         
+           const doLoad = async () => {
+             try {
+               const shpBuf = await readBuf(shpFile);
+               const dbfBuf = dbfFile ? await readBuf(dbfFile) : null;
+         
+               if (prjFile) {
+                 const prjText = await new Promise(res => { const r = new FileReader(); r.onload = e => res(e.target.result); r.readAsText(prjFile); });
+                 crs = detectCRSFromWKT(prjText);
+               }
+         
+               const features = [];
+               const source = dbfBuf ? shapefile.open(shpBuf, dbfBuf) : shapefile.open(shpBuf);
+               const s = await source;
+               let result;
+               while (!(result = await s.read()).done) features.push(result.value);
+               const gj = { type: 'FeatureCollection', features };
+               addLayer(gj, getName, crs, shpFile.name);
+             } catch (err) { notify('Shapefile error: ' + err.message, 'error'); console.error(err); }
+           };
+           doLoad();
+         }
+         
+         function detectCRSFromWKT(wkt) {
+           if (!wkt) return 'EPSG:4326';
+           if (wkt.includes('GCS_WGS_1984') || wkt.includes('WGS 1984') || wkt.includes('WGS84')) return 'EPSG:4326';
+           if (wkt.includes('Web_Mercator') || wkt.includes('Mercator_Auxiliary') || wkt.includes('3857')) return 'EPSG:3857';
+           const epsgMatch = wkt.match(/EPSG[",:\s]+(\d+)/i);
+           if (epsgMatch) return `EPSG:${epsgMatch[1]}`;
+           const utmMatch = wkt.match(/UTM.+Zone.?(\d+)/i);
+           if (utmMatch) {
+             const zone = parseInt(utmMatch[1]);
+             const isNorth = !wkt.includes('South');
+             return `EPSG:${isNorth ? 32600+zone : 32700+zone}`;
+           }
+           return 'EPSG:4326';
+         }
+         
+         // ═══════════════════════════════════════════════════════
+         //  ADD LAYER
+         // ═══════════════════════════════════════════════════════
+         function addLayer(geojson, name, crs, filename) {
+           const id = 'layer_' + (++layerIdCounter);
+           const color = COLORS[(layerIdCounter - 1) % COLORS.length];
+         
+           // Reproject to 4326 if needed for display
+           let displayGJ = geojson;
+           if (crs && crs !== 'EPSG:4326') {
+             displayGJ = reprojectGeoJSON(geojson, crs, 'EPSG:4326');
+           }
+         
+           const featureCount = (displayGJ.features || []).length;
+           const bbox = computeBbox(displayGJ);
+           const geomTypes = [...new Set((displayGJ.features || []).map(f => f.geometry && f.geometry.type).filter(Boolean))];
+         
+           const layerObj = {
+             id, name, geojson: displayGJ, originalGeojson: geojson,
+             color, visible: true, crs: crs || 'EPSG:4326',
+             filename, featureCount, bbox, geomTypes,
+             filteredIndices: null, selectedIndices: new Set(),
+             leafletLayer: null, opacity: 0.8, style: { single: true }
+           };
+         
+           const leafletLayer = createLeafletLayer(displayGJ, color, id);
+           layerObj.leafletLayer = leafletLayer;
+           leafletLayer.addTo(map);
+           state.layers[id] = layerObj;
+         
+           if (bbox) {
+             try { map.fitBounds([[bbox.miny, bbox.minx], [bbox.maxy, bbox.maxx]], { padding: [20,20] }); } catch {}
+           }
+         
+           updateLayersList();
+           updateAllSelects();
+           setActiveLayer(id);
+           showMetadata(id);
+           loadAttrTable();
+           notify(`Loaded: ${name} (${featureCount} features, ${crs})`, 'success');
+           logMsg(`Layer added: ${name} | Features: ${featureCount} | CRS: ${crs}`);
+         
+           document.getElementById('status-features').textContent = `Features: ${featureCount}`;
+           document.getElementById('status-crs').textContent = `CRS: ${crs}`;
+           document.getElementById('layer-count-badge').textContent = Object.keys(state.layers).length;
+           document.getElementById('empty-layers').style.display = 'none';
+         }
+         
+         function createLeafletLayer(geojson, color, id) {
+           return L.geoJSON(geojson, {
+             style: feature => getFeatureStyle(feature, id, color),
+             pointToLayer: (feature, latlng) => {
+               return L.circleMarker(latlng, {
+                 radius: 6,
+                 fillColor: color,
+                 color: '#fff',
+                 weight: 1,
+                 opacity: 1,
+                 fillOpacity: 0.8
+               });
+             },
+             onEachFeature: (feature, layer) => {
+               layer.on('click', e => {
+                 L.DomEvent.stopPropagation(e);
+                 showFeaturePopup(feature, layer, id);
+                 toggleFeatureSelect(id, feature._index);
+               });
+               layer.on('mouseover', () => {
+                 if (layer.setStyle) layer.setStyle({ weight: 3, opacity: 1 });
+               });
+               layer.on('mouseout', () => {
+                 if (layer.setStyle) {
+                   const layerObj = state.layers[id];
+                   if (layerObj) layer.setStyle(getFeatureStyle(feature, id, layerObj.color));
+                 }
+               });
+             },
+             filter: (feature, i) => {
+               feature._index = i;
+               return true;
+             }
+           });
+         }
+         
+         function getFeatureStyle(feature, id, color) {
+           const layerObj = state.layers[id];
+           const opacity = layerObj ? layerObj.opacity : 0.8;
+           return {
+             fillColor: color,
+             color: '#ffffff',
+             weight: 1,
+             opacity: 1,
+             fillOpacity: opacity
+           };
+         }
+         
+         function showFeaturePopup(feature, layer, id) {
+           const props = feature.properties || {};
+           let html = `<div class="popup-title">${state.layers[id]?.name || 'Feature'}</div>`;
+           html += `<div style="max-height:200px;overflow-y:auto">`;
+           Object.entries(props).slice(0, 20).forEach(([k, v]) => {
+             html += `<div class="popup-row"><span class="popup-key">${k}</span><span class="popup-val">${v ?? '—'}</span></div>`;
+           });
+           if (Object.keys(props).length > 20) html += `<div class="popup-row" style="color:var(--text-dim)">... ${Object.keys(props).length - 20} more fields</div>`;
+           html += '</div>';
+           if (feature.geometry) {
+             html += `<div style="margin-top:8px;font-size:10px;color:var(--text-dim)">${feature.geometry.type}</div>`;
+           }
+           layer.bindPopup(html).openPopup();
+         }
+         
+         // ═══════════════════════════════════════════════════════
+         //  LAYER MANAGEMENT
+         // ═══════════════════════════════════════════════════════
+         function updateLayersList() {
+           const list = document.getElementById('layers-list');
+           list.innerHTML = '';
+           if (Object.keys(state.layers).length === 0) {
+             list.innerHTML = '<div class="empty-state" id="empty-layers"><i class="fas fa-layer-group"></i><p>No layers loaded</p></div>';
+             return;
+           }
+           Object.values(state.layers).reverse().forEach(layer => {
+             const div = document.createElement('div');
+             div.className = `layer-item ${state.activeLayerId === layer.id ? 'active-layer' : ''}`;
+             div.onclick = () => { setActiveLayer(layer.id); showMetadata(layer.id); };
+             div.innerHTML = `
+               <div class="layer-color-dot" style="background:${layer.color}"></div>
+               <span class="layer-name" title="${layer.name}">${layer.name}</span>
+               <span class="layer-count">${layer.featureCount}</span>
+               <div class="layer-actions">
+                 <button class="layer-action-btn" onclick="event.stopPropagation();toggleLayerVisible('${layer.id}')" title="Toggle">
+                   <i class="fas ${layer.visible ? 'fa-eye' : 'fa-eye-slash'}"></i>
+                 </button>
+                 <button class="layer-action-btn" onclick="event.stopPropagation();zoomToLayerById('${layer.id}')" title="Zoom">
+                   <i class="fas fa-expand-arrows-alt"></i>
+                 </button>
+                 <button class="layer-action-btn" onclick="event.stopPropagation();openExportModal('${layer.id}')" title="Export">
+                   <i class="fas fa-download"></i>
+                 </button>
+         <button class="layer-action-btn" onclick="event.stopPropagation();openGeoCopyModal();document.getElementById('geocopy-layer-sel').value='${layer.id}';refreshGeoCopy()" title="Copy Geometry" style="color:var(--accent4)">
+           <i class="fas fa-copy"></i>
+         </button>
+                 <button class="layer-action-btn" onclick="event.stopPropagation();removeLayer('${layer.id}')" title="Remove" style="color:var(--accent3)">
+                   <i class="fas fa-trash"></i>
+                 </button>
+               </div>
+             `;
+             list.appendChild(div);
+           });
+           document.getElementById('layer-count-badge').textContent = Object.keys(state.layers).length;
+         }
+         
+         function updateAllSelects() {
+           const selects = ['active-layer-select','query-layer-select','attr-layer-select','reproject-layer','symbolize-layer'];
+           selects.forEach(sid => {
+             const sel = document.getElementById(sid);
+             if (!sel) return;
+             const val = sel.value;
+             sel.innerHTML = '<option value="">— Select Layer —</option>';
+             Object.values(state.layers).forEach(l => {
+               const opt = document.createElement('option');
+               opt.value = l.id;
+               opt.textContent = l.name;
+               sel.appendChild(opt);
+             });
+             if (val && state.layers[val]) sel.value = val;
+           });
+         }
+         
+         function setActiveLayer(id) {
+           state.activeLayerId = id;
+           const sel = document.getElementById('active-layer-select');
+           if (sel) sel.value = id;
+           updateLayersList();
+           if (id && state.layers[id]) {
+             showMetadata(id);
+             document.getElementById('attr-layer-select').value = id;
+             loadAttrTable();
+           }
+         }
+         
+         function toggleLayerVisible(id) {
+           const layer = state.layers[id];
+           if (!layer) return;
+           layer.visible = !layer.visible;
+           if (layer.visible) layer.leafletLayer.addTo(map);
+           else map.removeLayer(layer.leafletLayer);
+           updateLayersList();
+         }
+         
+         function removeLayer(id) {
+           if (!state.layers[id]) return;
+           map.removeLayer(state.layers[id].leafletLayer);
+           delete state.layers[id];
+           if (state.activeLayerId === id) state.activeLayerId = null;
+           updateLayersList();
+           updateAllSelects();
+           notify('Layer removed', 'info');
+           document.getElementById('layer-count-badge').textContent = Object.keys(state.layers).length;
+           document.getElementById('metadata-content').innerHTML = '<div class="empty-state"><i class="fas fa-info-circle"></i><p>No layer selected</p></div>';
+         }
+         
+         function removeActiveLayer() { if (state.activeLayerId) removeLayer(state.activeLayerId); }
+         
+         function zoomToLayerById(id) {
+           const layer = state.layers[id];
+           if (!layer || !layer.bbox) return;
+           const b = layer.bbox;
+           map.fitBounds([[b.miny, b.minx],[b.maxy, b.maxx]], { padding: [30,30] });
+         }
+         function zoomToLayer() { if (state.activeLayerId) zoomToLayerById(state.activeLayerId); }
+         
+         function setLayerOpacity(val) {
+           const id = document.getElementById('active-layer-select').value;
+           if (!state.layers[id]) return;
+           const opacity = val / 100;
+           state.layers[id].opacity = opacity;
+           state.layers[id].leafletLayer.setStyle({ fillOpacity: opacity });
+         }
+         
+         function fitAll() {
+           const layers = Object.values(state.layers).filter(l => l.visible && l.bbox);
+           if (layers.length === 0) return;
+           let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+           layers.forEach(l => {
+             minx = Math.min(minx, l.bbox.minx);
+             miny = Math.min(miny, l.bbox.miny);
+             maxx = Math.max(maxx, l.bbox.maxx);
+             maxy = Math.max(maxy, l.bbox.maxy);
+           });
+           map.fitBounds([[miny, minx],[maxy, maxx]], { padding: [30,30] });
+         }
+         
+         // ═══════════════════════════════════════════════════════
+         //  METADATA
+         // ═══════════════════════════════════════════════════════
+         function showMetadata(id) {
+           const layer = state.layers[id];
+           if (!layer) return;
+         
+           const bbox = layer.bbox;
+           const props = (layer.geojson.features || []).length > 0 ? Object.keys(layer.geojson.features[0].properties || {}) : [];
+         
+           let html = `
+             <div class="right-section-title"><i class="fas fa-info-circle"></i> ${layer.name}</div>
+             <div class="meta-grid">
+               <div class="meta-card">
+                 <div class="meta-label">Features</div>
+                 <div class="meta-value">${layer.featureCount.toLocaleString()}</div>
+               </div>
+               <div class="meta-card">
+                 <div class="meta-label">CRS</div>
+                 <div class="meta-value" style="color:var(--accent)">${layer.crs}</div>
+               </div>
+               <div class="meta-card">
+                 <div class="meta-label">Geometry</div>
+                 <div class="meta-value">${layer.geomTypes.join(', ') || '—'}</div>
+               </div>
+               <div class="meta-card">
+                 <div class="meta-label">Fields</div>
+                 <div class="meta-value">${props.length}</div>
+               </div>
+               ${bbox ? `
+               <div class="meta-card full">
+                 <div class="meta-label">Bounding Box</div>
+                 <div class="meta-value mono" style="font-size:10px">
+                   W:${bbox.minx.toFixed(4)} E:${bbox.maxx.toFixed(4)}<br>
+                   S:${bbox.miny.toFixed(4)} N:${bbox.maxy.toFixed(4)}
+                 </div>
+               </div>` : ''}
+               <div class="meta-card">
+                 <div class="meta-label">Source File</div>
+                 <div class="meta-value" style="font-size:10px">${layer.filename || '—'}</div>
+               </div>
+               <div class="meta-card">
+                 <div class="meta-label">Visible</div>
+                 <div class="meta-value">${layer.visible ? '✓ Yes' : '✗ No'}</div>
+               </div>
+             </div>
+           `;
+         
+           if (props.length > 0) {
+             html += `
+               <div class="separator"></div>
+               <div class="right-section-title"><i class="fas fa-columns"></i> Fields (${props.length})</div>
+               <div style="display:flex;flex-wrap:wrap;gap:4px">
+             `;
+             props.forEach(p => {
+               const vals = (layer.geojson.features || []).map(f => f.properties?.[p]).filter(v => v !== null && v !== undefined);
+               const type = vals.length > 0 && !isNaN(vals[0]) ? 'num' : 'str';
+               html += `<span class="badge ${type==='num' ? 'badge-blue' : 'badge-green'}" title="${p}">${p}</span>`;
+             });
+             html += '</div>';
+         
+             html += `
+               <div class="separator"></div>
+               <div class="right-section-title"><i class="fas fa-chart-bar"></i> Field Stats</div>
+             `;
+             const numFields = props.filter(p => {
+               const vals = (layer.geojson.features || []).map(f => f.properties?.[p]).filter(v => v !== null && v !== undefined && !isNaN(v));
+               return vals.length > 0;
+             }).slice(0, 5);
+         
+             numFields.forEach(p => {
+               const vals = (layer.geojson.features || []).map(f => parseFloat(f.properties?.[p])).filter(v => !isNaN(v));
+               const min = Math.min(...vals).toFixed(3);
+               const max = Math.max(...vals).toFixed(3);
+               const avg = (vals.reduce((a,b) => a+b, 0)/vals.length).toFixed(3);
+               html += `
+                 <div class="meta-card full" style="margin-bottom:4px">
+                   <div class="meta-label">${p}</div>
+                   <div style="display:flex;gap:12px;font-size:11px">
+                     <span>Min: <b>${min}</b></span>
+                     <span>Max: <b>${max}</b></span>
+                     <span>Avg: <b>${avg}</b></span>
+                   </div>
+                 </div>
+               `;
+             });
+           }
+         
+           const cont = document.getElementById('metadata-content');
+           cont.innerHTML = html;
+         }
+         
+         // ═══════════════════════════════════════════════════════
+         //  ATTRIBUTE TABLE
+         // ═══════════════════════════════════════════════════════
+         function loadAttrTable() {
+           const id = document.getElementById('attr-layer-select').value;
+           const wrap = document.getElementById('attr-table-wrap');
+           const countEl = document.getElementById('attr-count');
+         
+           if (!id || !state.layers[id]) {
+             wrap.innerHTML = '<div class="empty-state"><i class="fas fa-table"></i><p>Select a layer to view attribute table</p></div>';
+             countEl.textContent = '';
+             return;
+           }
+         
+           const layer = state.layers[id];
+           const features = layer.geojson.features || [];
+           if (features.length === 0) { wrap.innerHTML = '<div class="empty-state"><p>No features</p></div>'; return; }
+         
+           const fields = Object.keys(features[0].properties || {});
+           const filteredIdx = layer.filteredIndices;
+           const displayFeatures = filteredIdx !== null ? features.filter((_, i) => filteredIdx.has(i)) : features;
+         
+           countEl.textContent = filteredIdx !== null
+             ? `${displayFeatures.length} / ${features.length} features`
+             : `${features.length} features`;
+         
+           let html = '<table class="attr-table"><thead><tr><th style="width:30px">#</th>';
+           html += `<th style="cursor:default">Geom</th>`;
+           fields.forEach(f => { html += `<th onclick="sortAttrTable('${id}','${f}')">${f} <i class="fas fa-sort" style="font-size:8px"></i></th>`; });
+           html += '</tr></thead><tbody>';
+         
+           displayFeatures.slice(0, 500).forEach((f, i) => {
+             const actualIdx = features.indexOf(f);
+             const selected = layer.selectedIndices.has(actualIdx);
+             const geomType = f.geometry?.type || '—';
+             html += `<tr class="${selected ? 'selected' : ''}" onclick="selectFeatureRow('${id}', ${actualIdx}, event)">`;
+             html += `<td>${actualIdx + 1}</td>`;
+             html += `<td><span class="badge badge-purple" style="font-size:9px">${geomType.substring(0,4)}</span></td>`;
+             fields.forEach(fld => {
+               const val = f.properties?.[fld];
+               html += `<td title="${val ?? ''}">${val !== null && val !== undefined ? String(val).substring(0, 60) : '—'}</td>`;
+             });
+             html += '</tr>';
+           });
+         
+           if (displayFeatures.length > 500) {
+             html += `<tr><td colspan="${fields.length+2}" style="text-align:center;color:var(--text-dim);padding:8px">... ${displayFeatures.length - 500} more rows (showing 500)</td></tr>`;
+           }
+           html += '</tbody></table>';
+           wrap.innerHTML = html;
+         }
+         
+         function filterAttrTable() {
+           const search = document.getElementById('attr-search').value.toLowerCase();
+           const rows = document.querySelectorAll('#attr-table-wrap .attr-table tbody tr');
+           rows.forEach(row => {
+             row.style.display = row.textContent.toLowerCase().includes(search) ? '' : 'none';
+           });
+         }
+         
+         function selectFeatureRow(id, idx, event) {
+           const layer = state.layers[id];
+           if (!layer) return;
+           if (event.ctrlKey || event.metaKey) {
+             if (layer.selectedIndices.has(idx)) layer.selectedIndices.delete(idx);
+             else layer.selectedIndices.add(idx);
+           } else {
+             layer.selectedIndices.clear();
+             layer.selectedIndices.add(idx);
+           }
+           loadAttrTable();
+           // highlight on map
+           highlightSelected(id);
+         }
+         
+         function highlightSelected(id) {
+           const layer = state.layers[id];
+           if (!layer) return;
+           layer.leafletLayer.eachLayer((l, i) => {
+             if (!l.feature) return;
+             const idx = (layer.geojson.features || []).indexOf(l.feature);
+             if (layer.selectedIndices.has(idx)) {
+               if (l.setStyle) l.setStyle({ weight: 3, color: '#ffa657', fillOpacity: 0.9 });
+               else if (l.setRadius) l.setStyle({ color: '#ffa657', weight: 2 });
+             } else {
+               layer.leafletLayer.resetStyle(l);
+             }
+           });
+         }
+         
+         function toggleFeatureSelect(id, idx) {
+           const layer = state.layers[id];
+           if (!layer) return;
+           if (layer.selectedIndices.has(idx)) layer.selectedIndices.delete(idx);
+           else layer.selectedIndices.add(idx);
+           if (document.getElementById('attr-layer-select').value === id) loadAttrTable();
+         }
+         
+         function selectAllFeatures() {
+           const id = document.getElementById('attr-layer-select').value;
+           const layer = state.layers[id];
+           if (!layer) return;
+           (layer.geojson.features || []).forEach((_, i) => layer.selectedIndices.add(i));
+           loadAttrTable();
+         }
+         function clearSelection() {
+           const id = document.getElementById('attr-layer-select').value;
+           const layer = state.layers[id];
+           if (!layer) return;
+           layer.selectedIndices.clear();
+           loadAttrTable();
+           highlightSelected(id);
+         }
+         
+         function sortAttrTable(id, field) {
+           const layer = state.layers[id];
+           if (!layer) return;
+           const features = layer.geojson.features || [];
+           const isNum = !isNaN(features[0]?.properties?.[field]);
+           features.sort((a, b) => {
+             const va = a.properties?.[field];
+             const vb = b.properties?.[field];
+             if (isNum) return parseFloat(va) - parseFloat(vb);
+             return String(va).localeCompare(String(vb));
+           });
+           loadAttrTable();
+         }
+         
+         // ═══════════════════════════════════════════════════════
+         //  QUERY BUILDER
+         // ═══════════════════════════════════════════════════════
+         function setQueryMode(mode) {
+           state.queryMode = mode;
+           document.getElementById('query-builder-section').style.display = mode === 'builder' ? '' : 'none';
+           document.getElementById('sql-section').style.display = mode === 'sql' ? '' : 'none';
+         }
+         
+         function updateQueryFields() {
+           const id = document.getElementById('query-layer-select').value;
+           state.queryRules = [];
+           document.getElementById('query-rules').innerHTML = '';
+           if (!id || !state.layers[id]) return;
+           addQueryRule();
+         }
+         
+         function getLayerFields(id) {
+           const layer = state.layers[id];
+           if (!layer || !layer.geojson.features?.length) return [];
+           return Object.keys(layer.geojson.features[0].properties || {});
+         }
+         
+         function addQueryRule() {
+           const id = document.getElementById('query-layer-select').value;
+           const fields = getLayerFields(id);
+           const ruleId = Date.now();
+           const div = document.createElement('div');
+           div.className = 'query-rule';
+           div.id = 'rule-' + ruleId;
+         
+           const fieldOpts = fields.map(f => `<option value="${f}">${f}</option>`).join('');
+           div.innerHTML = `
+             <select onchange="updateRuleOperators(this, ${ruleId})">${fieldOpts}</select>
+             <select id="op-${ruleId}">
+               <option>=</option><option>!=</option><option>&gt;</option><option>&lt;</option>
+               <option>&gt;=</option><option>&lt;=</option><option>LIKE</option><option>IN</option>
+             </select>
+             <input type="text" placeholder="value" id="val-${ruleId}" style="flex:1;min-width:60px">
+             <button class="remove-rule-btn" onclick="removeRule(${ruleId})"><i class="fas fa-times"></i></button>
+           `;
+           document.getElementById('query-rules').appendChild(div);
+           state.queryRules.push(ruleId);
+         }
+         
+         function removeRule(id) {
+           document.getElementById('rule-' + id)?.remove();
+           state.queryRules = state.queryRules.filter(r => r !== id);
+         }
+         
+         function applyQuery() {
+           const layerId = document.getElementById('query-layer-select').value;
+           if (!layerId || !state.layers[layerId]) { notify('Select a layer first', 'warn'); return; }
+           const layer = state.layers[layerId];
+           const features = layer.geojson.features || [];
+           const logic = document.getElementById('query-logic').value;
+         
+           let matchFn;
+           if (state.queryMode === 'sql') {
+             const sql = document.getElementById('sql-input').value;
+             matchFn = f => evaluateSQLWhere(f.properties || {}, sql);
+           } else {
+             const rules = state.queryRules.map(rid => {
+               const ruleEl = document.getElementById('rule-' + rid);
+               if (!ruleEl) return null;
+               const selects = ruleEl.querySelectorAll('select');
+               const field = selects[0]?.value;
+               const op = selects[1]?.value.replace('&gt;','>').replace('&lt;','<');
+               const val = document.getElementById('val-' + rid)?.value;
+               return { field, op, val };
+             }).filter(Boolean);
+         
+             if (rules.length === 0) { notify('Add at least one rule', 'warn'); return; }
+         
+             matchFn = f => {
+               const props = f.properties || {};
+               const results = rules.map(r => evaluateRule(props, r));
+               return logic === 'AND' ? results.every(Boolean) : results.some(Boolean);
+             };
+           }
+         
+           const filtered = new Set();
+           features.forEach((f, i) => { if (matchFn(f)) filtered.add(i); });
+           layer.filteredIndices = filtered;
+         
+           // Re-render map layer to show filtered
+           layer.leafletLayer.eachLayer(l => {
+             if (!l.feature) return;
+             const idx = features.indexOf(l.feature);
+             if (l.setStyle) {
+               l.setStyle({ fillOpacity: filtered.has(idx) ? 0.9 : 0.1, opacity: filtered.has(idx) ? 1 : 0.2 });
+             }
+           });
+         
+           const stats = `${filtered.size} / ${features.length} features match`;
+           document.getElementById('query-stats').textContent = stats;
+           notify(stats, 'success');
+         
+           // update attr table
+           document.getElementById('attr-layer-select').value = layerId;
+           loadAttrTable();
+         }
+         
+         function evaluateRule(props, rule) {
+           const v = props[rule.field];
+           const raw = rule.val;
+           const isNum = !isNaN(v) && !isNaN(raw);
+           const propVal = isNum ? parseFloat(v) : String(v).toLowerCase();
+           const ruleVal = isNum ? parseFloat(raw) : raw.toLowerCase();
+         
+           switch (rule.op) {
+             case '=':  return propVal == ruleVal;
+             case '!=': return propVal != ruleVal;
+             case '>':  return propVal > ruleVal;
+             case '<':  return propVal < ruleVal;
+             case '>=': return propVal >= ruleVal;
+             case '<=': return propVal <= ruleVal;
+             case 'LIKE': return String(v).toLowerCase().includes(raw.replace(/%/g,'').toLowerCase());
+             case 'IN': return raw.split(',').map(x => x.trim().toLowerCase()).includes(String(v).toLowerCase());
+             default: return true;
+           }
+         }
+         
+         function evaluateSQLWhere(props, sql) {
+           try {
+             let expr = sql;
+             Object.entries(props).forEach(([k, v]) => {
+               const re = new RegExp(`\\b${k}\\b`, 'g');
+               const val = typeof v === 'string' ? `"${v}"` : v;
+               expr = expr.replace(re, val);
+             });
+             expr = expr.replace(/LIKE\s+"([^"]+)"/gi, (m, p) => 'true');
+             expr = expr.replace(/\bAND\b/gi, '&&').replace(/\bOR\b/gi, '||').replace(/\bNOT\b/gi, '!');
+             return !!Function('"use strict"; return (' + expr + ')')();
+           } catch { return false; }
+         }
+         
+         function clearQuery() {
+           const layerId = document.getElementById('query-layer-select').value;
+           if (layerId && state.layers[layerId]) {
+             state.layers[layerId].filteredIndices = null;
+             state.layers[layerId].leafletLayer.setStyle(f => getFeatureStyle(f, layerId, state.layers[layerId].color));
+           }
+           document.getElementById('query-rules').innerHTML = '';
+           state.queryRules = [];
+           document.getElementById('query-stats').textContent = '';
+           document.getElementById('sql-input').value = '';
+           loadAttrTable();
+           notify('Filter cleared', 'info');
+         }
+         
+         // ═══════════════════════════════════════════════════════
+         //  BBOX TOOL
+         // ═══════════════════════════════════════════════════════
+         let bboxDrawRect = null;
+         let bboxDrawStart = null;
+         let bboxDrawing = false;
+         
+         function activateTool(tool) {
+           document.querySelectorAll('.map-tool-btn').forEach(b => b.classList.remove('active'));
+           document.getElementById('tool-' + tool)?.classList.add('active');
+         
+           if (tool === 'bbox-draw') {
+             map.dragging.disable();
+             map.getContainer().style.cursor = 'crosshair';
+             bboxDrawing = true;
+             notify('Click and drag on map to draw bounding box', 'info');
+         
+             map.once('mousedown', startBboxDraw);
+           } else {
+             map.dragging.enable();
+             map.getContainer().style.cursor = '';
+             bboxDrawing = false;
+           }
+         }
+         
+         function startBboxDraw(e) {
+           bboxDrawStart = e.latlng;
+           if (bboxDrawRect) { map.removeLayer(bboxDrawRect); bboxDrawRect = null; }
+           map.on('mousemove', updateBboxDraw);
+           map.once('mouseup', endBboxDraw);
+         }
+         
+         function updateBboxDraw(e) {
+           if (!bboxDrawStart) return;
+           const bounds = L.latLngBounds(bboxDrawStart, e.latlng);
+           if (bboxDrawRect) map.removeLayer(bboxDrawRect);
+           bboxDrawRect = L.rectangle(bounds, {
+             color: '#ffa657', weight: 2, fillColor: '#ffa657', fillOpacity: 0.15
+           }).addTo(map);
+         }
+         
+         function endBboxDraw(e) {
+           map.off('mousemove', updateBboxDraw);
+           if (!bboxDrawStart) return;
+           const end = e.latlng;
+           const minx = Math.min(bboxDrawStart.lng, end.lng);
+           const maxx = Math.max(bboxDrawStart.lng, end.lng);
+           const miny = Math.min(bboxDrawStart.lat, end.lat);
+           const maxy = Math.max(bboxDrawStart.lat, end.lat);
+           setBboxValues(minx, miny, maxx, maxy);
+           bboxDrawStart = null;
+           map.dragging.enable();
+           map.getContainer().style.cursor = '';
+           activateTool('pan');
+           // switch to bbox tab
+           switchRightTab('bbox-info', null);
+         }
+         
+         function clearBboxDraw() {
+           if (bboxDrawRect) { map.removeLayer(bboxDrawRect); bboxDrawRect = null; }
+           state.currentBbox = null;
+           document.getElementById('bbox-outputs').style.display = 'none';
+           document.getElementById('bbox-empty').style.display = '';
+         }
+         function clearBboxDisplay() { clearBboxDraw(); }
+         
+         function bboxFromDraw() {
+           activateTool('bbox-draw');
+           switchRightTab('bbox-info', null);
+         }
+         
+         function bboxFromLayer() {
+           const id = state.activeLayerId || document.getElementById('active-layer-select').value;
+           if (!id || !state.layers[id]) { notify('Select an active layer first', 'warn'); return; }
+           const b = state.layers[id].bbox;
+           if (!b) { notify('Layer has no bbox', 'warn'); return; }
+           setBboxValues(b.minx, b.miny, b.maxx, b.maxy);
+           // draw on map
+           if (bboxDrawRect) map.removeLayer(bboxDrawRect);
+           bboxDrawRect = L.rectangle([[b.miny, b.minx],[b.maxy, b.maxx]], {
+             color: '#ffa657', weight: 2, fillColor: '#ffa657', fillOpacity: 0.15
+           }).addTo(map);
+         }
+         
+         function bboxFromSelected() {
+           const id = document.getElementById('attr-layer-select').value || state.activeLayerId;
+           const layer = state.layers[id];
+           if (!layer || layer.selectedIndices.size === 0) { notify('Select features first', 'warn'); return; }
+           const selectedFeatures = {
+             type: 'FeatureCollection',
+             features: [...layer.selectedIndices].map(i => layer.geojson.features[i]).filter(Boolean)
+           };
+           const b = computeBbox(selectedFeatures);
+           if (!b) { notify('Cannot compute bbox', 'warn'); return; }
+           setBboxValues(b.minx, b.miny, b.maxx, b.maxy);
+           if (bboxDrawRect) map.removeLayer(bboxDrawRect);
+           bboxDrawRect = L.rectangle([[b.miny, b.minx],[b.maxy, b.maxx]], {
+             color: '#58a6ff', weight: 2, fillColor: '#58a6ff', fillOpacity: 0.12
+           }).addTo(map);
+         }
+         
+         function openManualBbox() {
+           openModal('modal-manual-bbox');
+         }
+         
+         function applyManualBbox() {
+           const fmt = document.getElementById('manual-bbox-format').value;
+           let minx, miny, maxx, maxy;
+         
+           if (fmt === 'wkt') {
+             const wkt = document.getElementById('manual-bbox-wkt-input').value;
+             const nums = wkt.match(/-?\d+\.?\d*/g)?.map(Number);
+             if (!nums || nums.length < 8) { notify('Invalid WKT', 'error'); return; }
+             minx = Math.min(...nums.filter((_,i)=>i%2===0));
+             miny = Math.min(...nums.filter((_,i)=>i%2===1));
+             maxx = Math.max(...nums.filter((_,i)=>i%2===0));
+             maxy = Math.max(...nums.filter((_,i)=>i%2===1));
+           } else {
+             const vals = document.getElementById('manual-bbox-input').value.split(',').map(Number);
+             if (vals.length < 4 || vals.some(isNaN)) { notify('Invalid values', 'error'); return; }
+             if (fmt === 'lbrt') { [minx, miny, maxx, maxy] = vals; }
+             else if (fmt === 'lrtb') { [minx, maxx, maxy, miny] = vals; }
+           }
+         
+           setBboxValues(minx, miny, maxx, maxy);
+           if (bboxDrawRect) map.removeLayer(bboxDrawRect);
+           bboxDrawRect = L.rectangle([[miny, minx],[maxy, maxx]], {
+             color: '#ffa657', weight: 2, fillColor: '#ffa657', fillOpacity: 0.15
+           }).addTo(map);
+           map.fitBounds([[miny, minx],[maxy, maxx]]);
+           closeModal('modal-manual-bbox');
+         }
+         
+         document.getElementById('manual-bbox-format').addEventListener('change', function() {
+           document.getElementById('manual-bbox-coords-group').style.display = this.value === 'wkt' ? 'none' : '';
+           document.getElementById('manual-bbox-wkt-group').style.display = this.value === 'wkt' ? '' : 'none';
+         });
+         
+         function setBboxValues(minx, miny, maxx, maxy) {
+           state.currentBbox = { minx, miny, maxx, maxy };
+           const r = v => parseFloat(v).toFixed(6);
+         
+           document.getElementById('bbox-lrtb').innerHTML = `${r(minx)}, ${r(maxx)}, ${r(maxy)}, ${r(miny)} <i class="fas fa-copy bbox-copy-icon"></i>`;
+           document.getElementById('bbox-lbrt').innerHTML = `${r(minx)}, ${r(miny)}, ${r(maxx)}, ${r(maxy)} <i class="fas fa-copy bbox-copy-icon"></i>`;
+           document.getElementById('bbox-wkt').innerHTML = `POLYGON((${r(minx)} ${r(miny)}, ${r(maxx)} ${r(miny)}, ${r(maxx)} ${r(maxy)}, ${r(minx)} ${r(maxy)}, ${r(minx)} ${r(miny)})) <i class="fas fa-copy bbox-copy-icon"></i>`;
+           document.getElementById('bbox-geojson').innerHTML = `{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[${r(minx)},${r(miny)}],[${r(maxx)},${r(miny)}],[${r(maxx)},${r(maxy)}],[${r(minx)},${r(maxy)}],[${r(minx)},${r(miny)}]]]}} <i class="fas fa-copy bbox-copy-icon"></i>`;
+           document.getElementById('bbox-ee').innerHTML = `ee.Geometry.Rectangle([${r(minx)}, ${r(miny)}, ${r(maxx)}, ${r(maxy)}]) <i class="fas fa-copy bbox-copy-icon"></i>`;
+           document.getElementById('bbox-gdal').innerHTML = `-spat ${r(minx)} ${r(miny)} ${r(maxx)} ${r(maxy)} <i class="fas fa-copy bbox-copy-icon"></i>`;
+           document.getElementById('bbox-shapely').innerHTML = `from shapely.geometry import box\nbbox = box(${r(minx)}, ${r(miny)}, ${r(maxx)}, ${r(maxy)}) <i class="fas fa-copy bbox-copy-icon"></i>`;
+         
+           document.getElementById('bbox-outputs').style.display = '';
+           document.getElementById('bbox-empty').style.display = 'none';
+         }
+         
+         function copyBbox(type) {
+           const el = document.getElementById('bbox-' + type);
+           const text = el.childNodes[0]?.textContent?.trim() || el.textContent.trim();
+           navigator.clipboard.writeText(text).then(() => notify('Copied to clipboard!', 'success', 2000));
+         }
+         
+         function exportBbox() {
+           if (!state.currentBbox) { notify('No bbox set', 'warn'); return; }
+           const b = state.currentBbox;
+           const gj = {
+             type: 'FeatureCollection',
+             features: [{
+               type: 'Feature',
+               geometry: {
+                 type: 'Polygon',
+                 coordinates: [[[b.minx,b.miny],[b.maxx,b.miny],[b.maxx,b.maxy],[b.minx,b.maxy],[b.minx,b.miny]]]
+               },
+               properties: { minx: b.minx, miny: b.miny, maxx: b.maxx, maxy: b.maxy }
+             }]
+           };
+           downloadJSON(gj, 'bbox.geojson');
+           notify('BBox exported as GeoJSON', 'success');
+         }
+         
+         // ═══════════════════════════════════════════════════════
+         //  REPROJECT
+         // ═══════════════════════════════════════════════════════
+         // Register common projections
+         proj4.defs('EPSG:32643', '+proj=utm +zone=43 +datum=WGS84 +units=m +no_defs');
+         proj4.defs('EPSG:32644', '+proj=utm +zone=44 +datum=WGS84 +units=m +no_defs');
+         proj4.defs('EPSG:32645', '+proj=utm +zone=45 +datum=WGS84 +units=m +no_defs');
+         proj4.defs('EPSG:32646', '+proj=utm +zone=46 +datum=WGS84 +units=m +no_defs');
+         proj4.defs('EPSG:3857', '+proj=merc +a=6378137 +b=6378137 +lat_ts=0 +lon_0=0 +x_0=0 +y_0=0 +k=1 +units=m +nadgrids=@null +wktext +no_defs');
+         
+         for (let z = 1; z <= 60; z++) {
+           if (!proj4.defs(`EPSG:${32600+z}`)) proj4.defs(`EPSG:${32600+z}`, `+proj=utm +zone=${z} +datum=WGS84 +units=m +no_defs`);
+           if (!proj4.defs(`EPSG:${32700+z}`)) proj4.defs(`EPSG:${32700+z}`, `+proj=utm +zone=${z} +south +datum=WGS84 +units=m +no_defs`);
+         }
+         
+         document.getElementById('target-crs').addEventListener('change', function() {
+           document.getElementById('custom-crs-group').style.display = this.value === 'custom' ? '' : 'none';
+         });
+         
+         function detectSourceCRS() {
+           const id = document.getElementById('reproject-layer').value;
+           const layer = state.layers[id];
+           document.getElementById('source-crs-display').textContent = layer ? layer.crs : '—';
+         }
+         
+         function reprojectLayer() {
+           const id = document.getElementById('reproject-layer').value;
+           let targetCRS = document.getElementById('target-crs').value;
+           if (targetCRS === 'custom') {
+             const code = document.getElementById('custom-crs-input').value.trim();
+             targetCRS = `EPSG:${code}`;
+           }
+           if (!id || !state.layers[id]) { notify('Select source layer', 'warn'); return; }
+           const layer = state.layers[id];
+           const sourceCRS = layer.crs;
+         
+           const statusEl = document.getElementById('reproject-status');
+           statusEl.textContent = 'Reprojecting…';
+         
+           try {
+             const reprojected = reprojectGeoJSON(layer.geojson, sourceCRS, targetCRS);
+             const outputName = document.getElementById('reproject-output-name').value || `${layer.name}_${targetCRS.replace(':','_')}`;
+             addLayer(reprojected, outputName, targetCRS, `reprojected from ${layer.name}`);
+             statusEl.textContent = `✓ Done: ${sourceCRS} → ${targetCRS}`;
+             notify(`Reprojected to ${targetCRS}`, 'success');
+           } catch (err) {
+             statusEl.textContent = 'Error: ' + err.message;
+             notify('Reprojection failed: ' + err.message, 'error');
+           }
+         }
+         
+         function reprojectGeoJSON(gj, fromCRS, toCRS) {
+           if (fromCRS === toCRS) return JSON.parse(JSON.stringify(gj));
+           const converter = proj4(fromCRS, toCRS);
+           const clone = JSON.parse(JSON.stringify(gj));
+         
+           function reprojectCoords(coords) {
+             if (!Array.isArray(coords)) return coords;
+             if (typeof coords[0] === 'number') {
+               try {
+                 const [x, y] = converter.forward([coords[0], coords[1]]);
+                 return isNaN(x) || isNaN(y) ? coords : (coords.length > 2 ? [x, y, coords[2]] : [x, y]);
+               } catch { return coords; }
+             }
+             return coords.map(reprojectCoords);
+           }
+         
+           (clone.features || []).forEach(f => {
+             if (f.geometry?.coordinates) f.geometry.coordinates = reprojectCoords(f.geometry.coordinates);
+           });
+           return clone;
+         }
+         
+         // ═══════════════════════════════════════════════════════
+         //  SYMBOLIZE
+         // ═══════════════════════════════════════════════════════
+         document.getElementById('symbolize-mode').addEventListener('change', function() {
+           document.getElementById('symbolize-single-opts').style.display = this.value === 'single' ? '' : 'none';
+           document.getElementById('symbolize-numeric-opts').style.display = this.value === 'numeric' ? '' : 'none';
+           document.getElementById('symbolize-field-group').style.display = this.value === 'single' ? 'none' : '';
+         });
+         document.getElementById('symbolize-mode').dispatchEvent(new Event('change'));
+         
+         function loadSymbolizeFields() {
+           const id = document.getElementById('symbolize-layer').value;
+           const sel = document.getElementById('symbolize-field');
+           sel.innerHTML = '<option value="">— Select Field —</option>';
+           if (!id || !state.layers[id]) return;
+           const fields = getLayerFields(id);
+           fields.forEach(f => { sel.innerHTML += `<option value="${f}">${f}</option>`; });
+         }
+         
+         function applySymbolize() {
+           const id = document.getElementById('symbolize-layer').value;
+           const mode = document.getElementById('symbolize-mode').value;
+           if (!id || !state.layers[id]) { notify('Select a layer', 'warn'); return; }
+           const layer = state.layers[id];
+         
+           if (mode === 'single') {
+             const fill = document.getElementById('single-color').value;
+             const stroke = document.getElementById('single-stroke').value;
+             const opacity = parseInt(document.getElementById('single-opacity').value) / 100;
+             const weight = parseFloat(document.getElementById('single-weight').value);
+             const radius = parseInt(document.getElementById('single-radius').value);
+         
+             map.removeLayer(layer.leafletLayer);
+             const newLayer = L.geoJSON(layer.geojson, {
+               style: () => ({ fillColor: fill, color: stroke, weight, opacity: 1, fillOpacity: opacity }),
+               pointToLayer: (feature, latlng) => L.circleMarker(latlng, {
+                 radius, fillColor: fill, color: stroke, weight, opacity: 1, fillOpacity: opacity
+               }),
+               onEachFeature: (feature, l) => {
+                 l.on('click', () => showFeaturePopup(feature, l, id));
+               }
+             }).addTo(map);
+             layer.leafletLayer = newLayer;
+             layer.color = fill;
+             document.getElementById('symbolize-legend').innerHTML = `
+               <div class="symbol-preview">
+                 <div class="symbol-swatch" style="background:${fill}"></div>
+                 <span>All features</span>
+               </div>
+             `;
+         
+           } else if (mode === 'categorical') {
+             const field = document.getElementById('symbolize-field').value;
+             if (!field) { notify('Select a field', 'warn'); return; }
+             const values = [...new Set((layer.geojson.features || []).map(f => f.properties?.[field]))];
+             const colorMap = {};
+             values.forEach((v, i) => { colorMap[v] = pastelColor(i); });
+         
+             map.removeLayer(layer.leafletLayer);
+             const newLayer = L.geoJSON(layer.geojson, {
+               style: feature => ({ fillColor: colorMap[feature.properties?.[field]] || '#aaa', color: '#fff', weight: 1, fillOpacity: 0.8 }),
+               pointToLayer: (feature, latlng) => L.circleMarker(latlng, {
+                 radius: 6, fillColor: colorMap[feature.properties?.[field]] || '#aaa', color: '#fff', weight: 1, fillOpacity: 0.85
+               }),
+               onEachFeature: (feature, l) => l.on('click', () => showFeaturePopup(feature, l, id))
+             }).addTo(map);
+             layer.leafletLayer = newLayer;
+         
+             let legend = `<div class="right-section-title"><i class="fas fa-list"></i> Legend: ${field}</div>`;
+             values.slice(0, 20).forEach(v => {
+               legend += `<div class="symbol-preview"><div class="symbol-swatch" style="background:${colorMap[v]}"></div><span>${v}</span></div>`;
+             });
+             if (values.length > 20) legend += `<div style="font-size:10px;color:var(--text-dim)">...and ${values.length-20} more</div>`;
+             document.getElementById('symbolize-legend').innerHTML = legend;
+         
+           } else if (mode === 'numeric') {
+             const field = document.getElementById('symbolize-field').value;
+             if (!field) { notify('Select a field', 'warn'); return; }
+             const cmap = document.getElementById('numeric-colormap').value;
+             const classes = parseInt(document.getElementById('numeric-classes').value);
+             const vals = (layer.geojson.features || []).map(f => parseFloat(f.properties?.[field])).filter(v => !isNaN(v));
+             const minV = Math.min(...vals), maxV = Math.max(...vals);
+         
+             map.removeLayer(layer.leafletLayer);
+             const newLayer = L.geoJSON(layer.geojson, {
+               style: feature => {
+                 const v = parseFloat(feature.properties?.[field]);
+                 const t = (v - minV) / (maxV - minV || 1);
+                 const color = getColorFromCmap(cmap, t);
+                 return { fillColor: color, color: '#fff', weight: 1, fillOpacity: 0.85 };
+               },
+               pointToLayer: (feature, latlng) => {
+                 const v = parseFloat(feature.properties?.[field]);
+                 const t = (v - minV) / (maxV - minV || 1);
+                 return L.circleMarker(latlng, {
+                   radius: 4 + t * 8, fillColor: getColorFromCmap(cmap, t),
+                   color: '#fff', weight: 1, fillOpacity: 0.85
+                 });
+               },
+               onEachFeature: (feature, l) => l.on('click', () => showFeaturePopup(feature, l, id))
+             }).addTo(map);
+             layer.leafletLayer = newLayer;
+         
+             let legend = `<div class="right-section-title"><i class="fas fa-thermometer"></i> Legend: ${field}</div>`;
+             const step = (maxV - minV) / classes;
+             for (let i = 0; i < classes; i++) {
+               const t = i / (classes - 1);
+               const lo = (minV + i * step).toFixed(2), hi = (minV + (i+1) * step).toFixed(2);
+               legend += `<div class="symbol-preview"><div class="symbol-swatch" style="background:${getColorFromCmap(cmap, t)}"></div><span>${lo} – ${hi}</span></div>`;
+             }
+             document.getElementById('symbolize-legend').innerHTML = legend;
+           }
+         
+           updateLayersList();
+           notify('Style applied', 'success');
+         }
+         
+         function resetSymbolize() {
+           const id = document.getElementById('symbolize-layer').value;
+           if (!id || !state.layers[id]) return;
+           const layer = state.layers[id];
+           map.removeLayer(layer.leafletLayer);
+           layer.leafletLayer = createLeafletLayer(layer.geojson, layer.color, id);
+           layer.leafletLayer.addTo(map);
+           document.getElementById('symbolize-legend').innerHTML = '';
+           notify('Style reset', 'info');
+         }
+         
+         function pastelColor(i) {
+           const hue = (i * 137.5) % 360;
+           return `hsl(${hue}, 60%, 70%)`;
+         }
+         
+         const CMAPS = {
+           viridis: [[68,1,84],[59,82,139],[33,145,140],[94,201,98],[253,231,37]],
+           plasma:  [[13,8,135],[126,3,168],[204,71,120],[248,149,64],[240,249,33]],
+           inferno: [[0,0,4],[87,15,109],[188,55,84],[249,142,9],[252,255,164]],
+           blues:   [[247,251,255],[198,219,239],[107,174,214],[33,113,181],[8,48,107]],
+           greens:  [[247,252,245],[199,233,192],[116,196,118],[35,139,69],[0,68,27]],
+           reds:    [[255,245,240],[252,187,161],[252,108,70],[203,24,29],[103,0,13]],
+           spectral:[[213,62,79],[252,141,89],[254,224,139],[230,245,152],[153,213,148],[43,131,186]],
+           rdylgn:  [[215,25,28],[253,174,97],[255,255,191],[166,217,106],[26,150,65]]
+         };
+         
+         function getColorFromCmap(name, t) {
+           const stops = CMAPS[name] || CMAPS.viridis;
+           const scaled = t * (stops.length - 1);
+           const lo = Math.floor(scaled), hi = Math.ceil(scaled);
+           const frac = scaled - lo;
+           const c1 = stops[lo] || stops[0];
+           const c2 = stops[hi] || stops[stops.length - 1];
+           const r = Math.round(c1[0] + frac * (c2[0] - c1[0]));
+           const g = Math.round(c1[1] + frac * (c2[1] - c1[1]));
+           const b = Math.round(c1[2] + frac * (c2[2] - c1[2]));
+           return `rgb(${r},${g},${b})`;
+         }
+         
+         // ═══════════════════════════════════════════════════════
+         //  CSV IMPORT
+         // ═══════════════════════════════════════════════════════
+         function previewCSVFile(file) {
+           Papa.parse(file, {
+             header: true, skipEmptyLines: true, preview: 50,
+             complete: result => {
+               state.csvData = result;
+               state.csvHeaders = result.meta.fields || [];
+               renderCSVMappingUI();
+               renderCSVPreview(result.data.slice(0, 10));
+               document.getElementById('csv-layer-name').value = file.name.replace('.csv','');
+             },
+             error: () => notify('CSV parse error', 'error')
+           });
+         }
+         
+         function previewCSV(input) {
+           if (input.files.length) previewCSVFile(input.files[0]);
+         }
+         
+         function previewCSVFile_full(file) {
+           Papa.parse(file, {
+             header: true, skipEmptyLines: true,
+             complete: result => {
+               state.csvData = result;
+               state.csvHeaders = result.meta.fields || [];
+               renderCSVMappingUI();
+               renderCSVPreview(result.data.slice(0, 10));
+               document.getElementById('csv-layer-name').value = file.name.replace(/\.[^.]+$/,'');
+             }
+           });
+         }
+         
+         function renderCSVMappingUI() {
+           const headers = state.csvHeaders;
+           ['csv-x-col','csv-y-col'].forEach(id => {
+             const sel = document.getElementById(id);
+             sel.innerHTML = headers.map(h => `<option value="${h}">${h}</option>`).join('');
+           });
+           const zSel = document.getElementById('csv-z-col');
+           zSel.innerHTML = '<option value="">None</option>' + headers.map(h => `<option value="${h}">${h}</option>`).join('');
+         
+           // Auto-detect
+           const xGuess = headers.find(h => /^(lon|x|longitude|lng|easting)$/i.test(h)) || headers[0];
+           const yGuess = headers.find(h => /^(lat|y|latitude|northing)$/i.test(h)) || headers[1];
+           const zGuess = headers.find(h => /^(z|alt|elev|elevation|height|depth)$/i.test(h)) || '';
+           document.getElementById('csv-x-col').value = xGuess;
+           document.getElementById('csv-y-col').value = yGuess;
+           document.getElementById('csv-z-col').value = zGuess;
+           document.getElementById('csv-col-mapping').style.display = '';
+         }
+         
+         function renderCSVPreview(rows) {
+           if (!rows.length) return;
+           const fields = Object.keys(rows[0]);
+           let html = '<div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:6px">Preview (10 rows)</div>';
+           html += '<div style="overflow:auto;max-height:130px"><table class="attr-table"><thead><tr>';
+           fields.forEach(f => { html += `<th>${f}</th>`; });
+           html += '</tr></thead><tbody>';
+           rows.forEach(row => {
+             html += '<tr>';
+             fields.forEach(f => { html += `<td>${row[f] ?? '—'}</td>`; });
+             html += '</tr>';
+           });
+           html += '</tbody></table></div>';
+           document.getElementById('csv-preview-wrap').innerHTML = html;
+         }
+         
+         function importCSVPoints() {
+           if (!state.csvData) { notify('Load a CSV first', 'warn'); return; }
+           const xCol = document.getElementById('csv-x-col').value;
+           const yCol = document.getElementById('csv-y-col').value;
+           const zCol = document.getElementById('csv-z-col').value;
+           const crs = document.getElementById('csv-crs').value;
+           const name = document.getElementById('csv-layer-name').value || 'CSV Points';
+         
+           const features = [];
+           state.csvData.data.forEach((row, i) => {
+             const x = parseFloat(row[xCol]), y = parseFloat(row[yCol]);
+             if (isNaN(x) || isNaN(y)) return;
+             const props = { ...row, _row: i + 1 };
+             if (zCol && row[zCol]) props._z = parseFloat(row[zCol]);
+             features.push({
+               type: 'Feature',
+               geometry: { type: 'Point', coordinates: zCol ? [x, y, parseFloat(row[zCol]) || 0] : [x, y] },
+               properties: props
+             });
+           });
+         
+           if (features.length === 0) { notify('No valid points found. Check X/Y columns.', 'error'); return; }
+           const gj = { type: 'FeatureCollection', features };
+           addLayer(gj, name, crs, 'CSV Import');
+           notify(`Imported ${features.length} points from CSV`, 'success');
+         }
+         
+         function saveCSVAsGeoJSON() {
+           if (!state.csvData) { notify('Load a CSV first', 'warn'); return; }
+           const xCol = document.getElementById('csv-x-col').value;
+           const yCol = document.getElementById('csv-y-col').value;
+           const zCol = document.getElementById('csv-z-col').value;
+           const name = document.getElementById('csv-layer-name').value || 'export';
+         
+           const features = state.csvData.data.map((row, i) => {
+             const x = parseFloat(row[xCol]), y = parseFloat(row[yCol]);
+             if (isNaN(x) || isNaN(y)) return null;
+             return {
+               type: 'Feature',
+               geometry: { type: 'Point', coordinates: zCol && row[zCol] ? [x, y, parseFloat(row[zCol])] : [x, y] },
+               properties: { ...row }
+             };
+           }).filter(Boolean);
+         
+           downloadJSON({ type: 'FeatureCollection', features }, name + '.geojson');
+           notify('Saved as GeoJSON', 'success');
+         }
+         
+         // ═══════════════════════════════════════════════════════
+         //  EXPORT
+         // ═══════════════════════════════════════════════════════
+         function openExportModal(id) {
+           if (id) state.activeLayerId = id;
+           document.getElementById('export-filename').value = state.layers[id]?.name || 'export';
+           openModal('modal-export');
+         }
+         function exportActiveLayer() { openExportModal(state.activeLayerId); }
+         
+         function exportFiltered() {
+           const id = document.getElementById('query-layer-select').value || state.activeLayerId;
+           if (!id) { notify('No layer selected', 'warn'); return; }
+           state.activeLayerId = id;
+           document.getElementById('export-which').value = 'filtered';
+           openExportModal(id);
+         }
+         function exportSelected() {
+           const id = document.getElementById('attr-layer-select').value;
+           if (!id) { notify('No layer selected', 'warn'); return; }
+           state.activeLayerId = id;
+           document.getElementById('export-which').value = 'selected';
+           openExportModal(id);
+         }
+         
+         function doExport() {
+           const id = state.activeLayerId;
+           const format = document.getElementById('export-format').value;
+           const filename = document.getElementById('export-filename').value || 'export';
+           const which = document.getElementById('export-which').value;
+         
+           if (!id || !state.layers[id]) { notify('No layer to export', 'warn'); return; }
+           const layer = state.layers[id];
+           let features = layer.geojson.features || [];
+         
+           if (which === 'filtered' && layer.filteredIndices) {
+             features = features.filter((_, i) => layer.filteredIndices.has(i));
+           } else if (which === 'selected' && layer.selectedIndices.size > 0) {
+             features = features.filter((_, i) => layer.selectedIndices.has(i));
+           }
+         
+           if (features.length === 0) { notify('No features to export', 'warn'); return; }
+         
+           const gj = { type: 'FeatureCollection', features };
+         
+           if (format === 'geojson') {
+             downloadJSON(gj, filename + '.geojson');
+           } else if (format === 'csv') {
+             downloadCSV(features, filename + '.csv');
+           } else if (format === 'kml') {
+             downloadKML(gj, filename + '.kml');
+           } else if (format === 'wkt') {
+             downloadWKT(features, filename + '.wkt');
+           }
+         
+           closeModal('modal-export');
+           notify(`Exported ${features.length} features as ${format.toUpperCase()}`, 'success');
+         }
+         
+         function downloadJSON(obj, filename) {
+           const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
+           triggerDownload(blob, filename);
+         }
+         
+         function downloadCSV(features, filename) {
+           const fields = Object.keys(features[0]?.properties || {});
+           const rows = [['feature_id', ...fields, 'wkt'].join(',')];
+           features.forEach((f, i) => {
+             const wkt = geomToWKT(f.geometry);
+             const vals = fields.map(k => {
+               const v = f.properties?.[k] ?? '';
+               return `"${String(v).replace(/"/g, '""')}"`;
+             });
+             rows.push([i + 1, ...vals, `"${wkt}"`].join(','));
+           });
+           const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+           triggerDownload(blob, filename);
+         }
+         
+         function downloadKML(gj, filename) {
+           let kml = `<?xml version="1.0" encoding="UTF-8"?>
+         <kml xmlns="http://www.opengis.net/kml/2.2">
+         <Document>`;
+           gj.features.forEach((f, i) => {
+             const props = f.properties || {};
+             const name = props.name || props.NAME || `Feature ${i+1}`;
+             kml += `
+           <Placemark>
+             <name>${name}</name>
+             <ExtendedData>
+               ${Object.entries(props).map(([k,v]) => `<Data name="${k}"><value>${v}</value></Data>`).join('\n      ')}
+             </ExtendedData>
+             ${geomToKML(f.geometry)}
+           </Placemark>`;
+           });
+           kml += '\n</Document></kml>';
+           triggerDownload(new Blob([kml], { type: 'application/vnd.google-earth.kml+xml' }), filename);
+         }
+         
+         function downloadWKT(features, filename) {
+           const lines = features.map(f => geomToWKT(f.geometry));
+           triggerDownload(new Blob([lines.join('\n')], { type: 'text/plain' }), filename);
+         }
+         
+         function geomToWKT(geom) {
+           if (!geom) return 'GEOMETRYCOLLECTION EMPTY';
+           if (geom.type === 'Point') return `POINT(${geom.coordinates.join(' ')})`;
+           if (geom.type === 'MultiPoint') return `MULTIPOINT(${geom.coordinates.map(c => `(${c.join(' ')})`).join(',')})`;
+           if (geom.type === 'LineString') return `LINESTRING(${geom.coordinates.map(c => c.join(' ')).join(',')})`;
+           if (geom.type === 'MultiLineString') return `MULTILINESTRING(${geom.coordinates.map(r => `(${r.map(c => c.join(' ')).join(',')})`).join(',')})`;
+           if (geom.type === 'Polygon') return `POLYGON(${geom.coordinates.map(r => `(${r.map(c => c.join(' ')).join(',')})`).join(',')})`;
+           if (geom.type === 'MultiPolygon') return `MULTIPOLYGON(${geom.coordinates.map(p => `(${p.map(r => `(${r.map(c => c.join(' ')).join(',')})`).join(',')})`).join(',')})`;
+           return 'GEOMETRYCOLLECTION EMPTY';
+         }
+         
+         function geomToKML(geom) {
+           if (!geom) return '';
+           if (geom.type === 'Point') return `<Point><coordinates>${geom.coordinates.join(',')}</coordinates></Point>`;
+           if (geom.type === 'LineString') return `<LineString><coordinates>${geom.coordinates.map(c => c.join(',')).join(' ')}</coordinates></LineString>`;
+           if (geom.type === 'Polygon') return `<Polygon><outerBoundaryIs><LinearRing><coordinates>${geom.coordinates[0].map(c => c.join(',')).join(' ')}</coordinates></LinearRing></outerBoundaryIs></Polygon>`;
+           return '';
+         }
+         
+         function triggerDownload(blob, filename) {
+           const url = URL.createObjectURL(blob);
+           const a = document.createElement('a');
+           a.href = url; a.download = filename;
+           document.body.appendChild(a); a.click();
+           setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+         }
+         
+         // ═══════════════════════════════════════════════════════
+         //  UTILS
+         // ═══════════════════════════════════════════════════════
+         function computeBbox(gj) {
+           let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+           function processCoords(coords) {
+             if (!Array.isArray(coords)) return;
+             if (typeof coords[0] === 'number') {
+               minx = Math.min(minx, coords[0]); maxx = Math.max(maxx, coords[0]);
+               miny = Math.min(miny, coords[1]); maxy = Math.max(maxy, coords[1]);
+             } else coords.forEach(processCoords);
+           }
+           (gj.features || []).forEach(f => { if (f.geometry?.coordinates) processCoords(f.geometry.coordinates); });
+           if (minx === Infinity) return null;
+           return { minx, miny, maxx, maxy };
+         }
+         
+         function openModal(id) { document.getElementById(id).classList.add('open'); }
+         function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+         
+         function showMeasureInfo() {
+           notify('Move mouse over map to see coordinates in status bar', 'info', 3000);
+         }
+         
+         // ═══════════════════════════════════════════════════════
+         //  MAP TOOL - PAN default
+         // ═══════════════════════════════════════════════════════
+         activateTool('pan');
+         
+         // ═══════════════════════════════════════════════════════
+         //  INIT
+         // ═══════════════════════════════════════════════════════
+         logMsg('GeoPro v1.0 initialized');
+         logMsg('© Manoj Singh — All rights reserved');
+         notify('Welcome to GeoPro v1.0 by Manoj Singh', 'info', 4000);
+         
+         // Close modals on overlay click
+         document.querySelectorAll('.modal-overlay').forEach(overlay => {
+           overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
+         });
+         
+         // Keyboard shortcuts
+         document.addEventListener('keydown', e => {
+           if (e.key === 'Escape') {
+             document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
+             activateTool('pan');
+           }
+           if (e.ctrlKey && e.key === 'f') { e.preventDefault(); switchRightTab('query', null); }
+           if (e.ctrlKey && e.key === 'b') { e.preventDefault(); switchRightTab('bbox-info', null); }
+         });
+         
+         // resize map on window resize
+         window.addEventListener('resize', () => map.invalidateSize());
+         
+         // Prevent map zoom on scroll in panels
+         ['left-panel','right-panel','bottom-panel'].forEach(id => {
+           document.getElementById(id).addEventListener('wheel', e => e.stopPropagation());
+         });
+         
+         // %% GEOMETRY COPY TOOL %%
+         let _geoCopyCache = {};
+         
+         function openGeoCopyModal(scope) {
+           // Populate layer select
+           const sel = document.getElementById('geocopy-layer-sel');
+           sel.innerHTML = '<option value="">— Select Layer —</option>';
+           Object.values(state.layers).forEach(l => {
+             sel.innerHTML += `<option value="${l.id}">${l.name} (${l.featureCount})</option>`;
+           });
+           // Pre-select active layer
+           if (state.activeLayerId) sel.value = state.activeLayerId;
+           if (scope) document.getElementById('geocopy-scope').value = scope;
+           refreshGeoCopy();
+           openModal('modal-geocopy');
+         }
+         
+         function getGeoCopyFeatures() {
+           const id = document.getElementById('geocopy-layer-sel').value;
+           const scope = document.getElementById('geocopy-scope').value;
+           if (!id || !state.layers[id]) return null;
+           const layer = state.layers[id];
+           let features = layer.geojson.features || [];
+         
+           if (scope === 'selected' && layer.selectedIndices.size > 0)
+             features = features.filter((_, i) => layer.selectedIndices.has(i));
+           else if (scope === 'filtered' && layer.filteredIndices)
+             features = features.filter((_, i) => layer.filteredIndices.has(i));
+         
+           return features;
+         }
+         
+         function refreshGeoCopy() {
+           const features = getGeoCopyFeatures();
+           if (!features || features.length === 0) {
+             ['geojson','ee_rect','ee_geom','ee_fc','wkt','shapely','turf','coords'].forEach(k => {
+               const el = document.getElementById('gcprev-' + k);
+               if (el) el.textContent = '—';
+             });
+             document.getElementById('geocopy-output-box').style.display = 'none';
+             return;
+           }
+         
+           const outtype = document.getElementById('geocopy-outtype').value;
+           const fc = { type: 'FeatureCollection', features };
+         
+           // Compute bbox for EE rect
+           const bbox = computeBbox(fc);
+         
+           // Build all format strings
+           _geoCopyCache = {};
+         
+           // --- GeoJSON ---
+           if (outtype === 'fc')
+             _geoCopyCache.geojson = JSON.stringify(fc, null, 2);
+           else if (outtype === 'geom' && features[0]?.geometry)
+             _geoCopyCache.geojson = JSON.stringify(features[0].geometry, null, 2);
+           else
+             _geoCopyCache.geojson = JSON.stringify(features.map(f => f.geometry), null, 2);
+         
+           // --- GEE Rectangle ---
+           if (bbox)
+             _geoCopyCache.ee_rect = `ee.Geometry.Rectangle([${bbox.minx.toFixed(6)}, ${bbox.miny.toFixed(6)}, ${bbox.maxx.toFixed(6)}, ${bbox.maxy.toFixed(6)}])`;
+           else
+             _geoCopyCache.ee_rect = '// No bbox available';
+         
+           // --- GEE ee.Geometry ---
+           _geoCopyCache.ee_geom = buildGEEGeometry(features, outtype);
+         
+           // --- GEE ee.FeatureCollection ---
+           _geoCopyCache.ee_fc = buildGEEFeatureCollection(features);
+         
+           // --- WKT ---
+           if (outtype === 'fc')
+             _geoCopyCache.wkt = features.map(f => geomToWKT(f.geometry)).join('\n');
+           else if (outtype === 'geom')
+             _geoCopyCache.wkt = geomToWKT(features[0]?.geometry);
+           else
+             _geoCopyCache.wkt = features.map(f => geomToWKT(f.geometry)).join('\n');
+         
+           // --- Shapely ---
+           _geoCopyCache.shapely = buildShapelyCode(features, outtype);
+         
+           // --- Turf.js ---
+           _geoCopyCache.turf = buildTurfCode(features, outtype);
+         
+           // --- Coords Array ---
+           _geoCopyCache.coords = buildCoordsArray(features, outtype);
+         
+           // Update previews (truncated)
+           Object.keys(_geoCopyCache).forEach(k => {
+             const el = document.getElementById('gcprev-' + k);
+             if (el) el.textContent = (_geoCopyCache[k] || '').substring(0, 80) + '…';
+           });
+         }
+         
+         function doGeoCopy(fmt) {
+           refreshGeoCopy();
+           const text = _geoCopyCache[fmt];
+           if (!text) { notify('Nothing to copy', 'warn'); return; }
+         
+           // Show in output box
+           const box = document.getElementById('geocopy-output-box');
+           box.style.display = '';
+           box.textContent = text;
+         
+           navigator.clipboard.writeText(text)
+             .then(() => notify(`Copied ${fmt.toUpperCase()} to clipboard!`, 'success', 2000))
+             .catch(() => {
+               // fallback: select text in box
+               const range = document.createRange();
+               range.selectNode(box);
+               window.getSelection().removeAllRanges();
+               window.getSelection().addRange(range);
+               notify('Select & Ctrl+C to copy (clipboard blocked)', 'warn');
+             });
+         }
+         
+         // --- Format Builders ---
+         
+         function buildGEEGeometry(features, outtype) {
+           if (features.length === 0) return '// No features';
+         
+           function coordsToGEE(geom) {
+             if (!geom) return 'ee.Geometry.Point([0,0])';
+             const c = geom.coordinates;
+             switch (geom.type) {
+               case 'Point':
+                 return `ee.Geometry.Point([${c[0]}, ${c[1]}])`;
+               case 'MultiPoint':
+                 return `ee.Geometry.MultiPoint(${JSON.stringify(c)})`;
+               case 'LineString':
+                 return `ee.Geometry.LineString(${JSON.stringify(c)})`;
+               case 'MultiLineString':
+                 return `ee.Geometry.MultiLineString(${JSON.stringify(c)})`;
+               case 'Polygon':
+                 return `ee.Geometry.Polygon(${JSON.stringify(c)})`;
+               case 'MultiPolygon':
+                 return `ee.Geometry.MultiPolygon(${JSON.stringify(c)})`;
+               default:
+                 return `ee.Geometry.Point([0,0]) // unsupported: ${geom.type}`;
+             }
+           }
+         
+           if (outtype === 'geom' || features.length === 1)
+             return coordsToGEE(features[0].geometry);
+         
+           // Multiple geometries → GeometryCollection or list
+           const geoms = features.map(f => coordsToGEE(f.geometry));
+           return `// List of ${geoms.length} geometries:\n[\n  ${geoms.join(',\n  ')}\n]`;
+         }
+         
+         function buildGEEFeatureCollection(features) {
+           if (features.length === 0) return 'ee.FeatureCollection([])';
+         
+           function coordsToGEE(geom) {
+             if (!geom) return 'null';
+             const c = geom.coordinates;
+             switch (geom.type) {
+               case 'Point': return `ee.Geometry.Point([${c[0]}, ${c[1]}])`;
+               case 'Polygon': return `ee.Geometry.Polygon(${JSON.stringify(c)})`;
+               case 'MultiPolygon': return `ee.Geometry.MultiPolygon(${JSON.stringify(c)})`;
+               case 'LineString': return `ee.Geometry.LineString(${JSON.stringify(c)})`;
+               default: return `ee.Geometry.Point([0,0])`;
+             }
+           }
+         
+           const featureStrs = features.slice(0, 50).map((f, i) => {
+             const geomStr = coordsToGEE(f.geometry);
+             const props = JSON.stringify(f.properties || {});
+             return `  ee.Feature(${geomStr}, ${props})`;
+           });
+         
+           let result = `ee.FeatureCollection([\n${featureStrs.join(',\n')}\n])`;
+           if (features.length > 50)
+             result += `\n// Note: showing 50 of ${features.length} features`;
+           return result;
+         }
+         
+         function buildShapelyCode(features, outtype) {
+           if (features.length === 0) return '# No features';
+         
+           function geomToShapely(geom) {
+             if (!geom) return 'None';
+             const c = geom.coordinates;
+             switch (geom.type) {
+               case 'Point':
+                 return `Point(${c[0]}, ${c[1]})`;
+               case 'MultiPoint':
+                 return `MultiPoint(${JSON.stringify(c)})`;
+               case 'LineString':
+                 return `LineString(${JSON.stringify(c)})`;
+               case 'MultiLineString':
+                 return `MultiLineString(${JSON.stringify(c)})`;
+               case 'Polygon':
+                 return `Polygon(${JSON.stringify(c[0])}${c.length > 1 ? ', holes=' + JSON.stringify(c.slice(1)) : ''})`;
+               case 'MultiPolygon':
+                 return `MultiPolygon(${JSON.stringify(c)})`;
+               default:
+                 return `# unsupported: ${geom.type}`;
+             }
+           }
+         
+           const imports = `from shapely.geometry import Point, MultiPoint, LineString, MultiLineString, Polygon, MultiPolygon\nfrom shapely.ops import unary_union\n\n`;
+         
+           if (outtype === 'geom' || features.length === 1)
+             return imports + `geom = ${geomToShapely(features[0]?.geometry)}`;
+         
+           const lines = features.slice(0, 50).map((f, i) =>
+             `  ${geomToShapely(f.geometry)},  # feature ${i+1}`
+           ).join('\n');
+           return imports + `geoms = [\n${lines}\n]\nunion = unary_union(geoms)`;
+         }
+         
+         function buildTurfCode(features, outtype) {
+           if (features.length === 0) return '// No features';
+         
+           const fc = JSON.stringify({ type: 'FeatureCollection', features }, null, 2);
+           if (outtype === 'fc')
+             return `// Turf.js FeatureCollection\nconst fc = ${fc};\n\n// Example operations:\n// const bbox = turf.bbox(fc);\n// const dissolved = turf.dissolve(fc);\n// const area = turf.area(fc);`;
+         
+           if (outtype === 'geom' && features[0]?.geometry) {
+             const g = JSON.stringify(features[0].geometry, null, 2);
+             return `// Turf.js Geometry\nconst geom = ${g};\nconst feature = turf.feature(geom);`;
+           }
+         
+           const geoms = JSON.stringify(features.map(f => f.geometry), null, 2);
+           return `// Turf.js Geometry Array\nconst geometries = ${geoms};`;
+         }
+         
+         function buildCoordsArray(features, outtype) {
+           if (features.length === 0) return '[]';
+         
+           function extractCoords(geom) {
+             if (!geom) return [];
+             if (geom.type === 'Point') return geom.coordinates;
+             if (geom.type === 'Polygon') return geom.coordinates[0];
+             if (geom.type === 'MultiPolygon') return geom.coordinates.map(p => p[0]);
+             if (geom.type === 'LineString') return geom.coordinates;
+             return geom.coordinates || [];
+           }
+         
+           if (outtype === 'geom' || features.length === 1)
+             return JSON.stringify(extractCoords(features[0]?.geometry), null, 2);
+         
+           return JSON.stringify(features.map(f => extractCoords(f.geometry)), null, 2);
+         }
+      </script>
+   </body>
+</html>
