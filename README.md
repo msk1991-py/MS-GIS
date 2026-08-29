@@ -9,7 +9,6 @@ This repository contains standalone **HTML/JavaScript-based GIS tools** that can
 
 | Tool                          | Description                                                              | Open Tool                                                                              |
 | ----------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- |
-| **UTM Grid Console**          | Generate, visualize, and work with UTM grid information and coordinates. | [🚀 Open Tool](https://msk1991-py.github.io/MS-GIS/UTM_Grid_Console.html)              |
 | **UTM Grid Console – Source** | HTML/JavaScript source code                                              | [📄 View Source](https://github.com/msk1991-py/MS-GIS/blob/main/UTM_Grid_Console.html) |
 
 ## 🚀 How to Use
